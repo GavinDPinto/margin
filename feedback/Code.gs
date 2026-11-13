@@ -154,15 +154,17 @@ function doGet(e) {
   const v = sh.getRange(row, 1, 1, COLS.length).getValues()[0];
   const status = v[C['Status'] - 1];
   const head = `<p class="k">${v[C['Type'] - 1] === 'bug' ? '🐞 Bug report' : '💡 Feature idea'}</p><h1>${esc_(v[C['Title'] - 1])}</h1><div class="d">${esc_(v[C['Description'] - 1])}</div>`;
-  if (status !== 'pending') {
-    const link = v[C['Issue URL'] - 1] ? `<p><a href="${v[C['Issue URL'] - 1]}">Open GitHub issue #${v[C['Issue #'] - 1]}</a></p>` : '';
+  const link = v[C['Issue URL'] - 1] ? `<p><a href="${v[C['Issue URL'] - 1]}">Open GitHub issue #${v[C['Issue #'] - 1]}</a></p>` : '';
+  let lateReject = false;
+  if (status === 'approved') lateReject = !issueShipped_(v[C['Issue #'] - 1]);
+  if (status !== 'pending' && !lateReject) {
     return page_('Already ' + status, head + `<p class="s">This report was already <b>${status}</b>.</p>` + link);
   }
   // The decision needs a tap on this page (email link scanners can't approve by just opening the link).
-  const want = p.do === 'reject' ? 'reject' : 'approve';
+  const want = (p.do === 'reject' || lateReject) ? 'reject' : 'approve';
   const kind = v[C['Type'] - 1], title = v[C['Title'] - 1];
   const canEmail = v[C['Wants email'] - 1] === 'yes' && !!v[C['Reporter email'] - 1];
-  const body = head + `
+  const body = head + (lateReject ? `<p class="s">You approved this earlier (<a href="${v[C['Issue URL'] - 1]}">issue #${v[C['Issue #'] - 1]}</a>), but it hasn’t shipped, so you can still turn it down. Rejecting closes the issue as “not planned”.</p>` : '') + `
     <div class="b"${want === 'reject' ? ' style="display:none"' : ''} id="appr">
       <button class="pri" onclick="go('approve')">Approve &amp; create GitHub issue</button>
       <button onclick="showReject()">Reject…</button>
@@ -175,7 +177,7 @@ function doGet(e) {
         ? `<label class="chk"><input type="checkbox" id="mail" checked onchange="prev()"> Email the reporter (they asked for updates)</label>
            <p class="k" style="margin-top:14px">Email preview</p><div id="pv" class="pv"></div>`
         : `<p class="s">The reporter didn't leave an email or ask for updates, so they won't be emailed.</p>`}
-      <div class="b"><button class="pri red" onclick="go('reject')">Reject${canEmail ? ' &amp; send' : ''}</button><button onclick="hideReject()">Back</button></div>
+      <div class="b"><button class="pri red" onclick="go('reject')">Reject${canEmail ? ' &amp; send' : ''}</button>${lateReject ? '' : '<button onclick="hideReject()">Back</button>'}</div>
     </div>
     <p id="msg" class="s"></p>
     <script>
@@ -209,8 +211,12 @@ function decide(id, sig, action, note, emailReporter) {
     const sh = sheet_(), row = findRow_(sh, id);
     if (!row) return { ok: false, error: 'Report not found' };
     const v = sh.getRange(row, 1, 1, COLS.length).getValues()[0];
-    if (v[C['Status'] - 1] !== 'pending') return { ok: false, error: 'Already ' + v[C['Status'] - 1] };
+    const st = v[C['Status'] - 1];
+    const late = st === 'approved' && action === 'reject';
+    if (late && issueShipped_(v[C['Issue #'] - 1])) return { ok: false, error: 'Already shipped, so it can’t be rejected now' };
+    if (st !== 'pending' && !late) return { ok: false, error: 'Already ' + st };
     if (action === 'reject') {
+      if (late) closeIssueNotPlanned_(v[C['Issue #'] - 1]);
       const why = clean_(note, 2000);
       if (sh.getRange(1, C['Owner note']).getValue() !== 'Owner note') sh.getRange(1, C['Owner note']).setValue('Owner note').setFontWeight('bold');
       sh.getRange(row, C['Status']).setValue('rejected'); sh.getRange(row, C['Decided']).setValue(new Date());
@@ -271,6 +277,25 @@ function ensureMediaBranch_() {
   const repo = gh_('GET', `/repos/${CONFIG.REPO}`);
   const main = gh_('GET', `/repos/${CONFIG.REPO}/git/ref/heads/${repo.default_branch}`);
   gh_('POST', `/repos/${CONFIG.REPO}/git/refs`, { ref: 'refs/heads/' + CONFIG.MEDIA_BRANCH, sha: main.object.sha });
+}
+
+function issueShipped_(num) {
+  if (!num) return false;
+  try { const i = gh_('GET', `/repos/${CONFIG.REPO}/issues/${num}`); return i.labels.some(l => l.name === CONFIG.SHIPPED_LABEL); }
+  catch (e) { console.error(e); return true; } // can't check → don't allow rejecting
+}
+/** Owner rejected after approving: make sure the builder won't pick it up, and close it politely on GitHub. */
+function closeIssueNotPlanned_(num) {
+  if (!num) return;
+  const issue = gh_('GET', `/repos/${CONFIG.REPO}/issues/${num}`);
+  for (const l of [CONFIG.APPROVED_LABEL, 'in-progress', 'needs-owner']) {
+    if (issue.labels.some(x => x.name === l)) { try { gh_('DELETE', `/repos/${CONFIG.REPO}/issues/${num}/labels/${encodeURIComponent(l)}`); } catch (e) {} }
+  }
+  try { gh_('POST', `/repos/${CONFIG.REPO}/issues/${num}/labels`, { labels: ['wontfix'] }); } catch (e) {}
+  if (issue.state === 'open') {
+    gh_('POST', `/repos/${CONFIG.REPO}/issues/${num}/comments`, { body: 'Thanks again for the suggestion. After thinking it over, the owner has decided not to add this to Margin for now, so this is closed as not planned.' });
+    gh_('PATCH', `/repos/${CONFIG.REPO}/issues/${num}`, { state: 'closed', state_reason: 'not_planned' });
+  }
 }
 
 /* ---------------------------------------------- tell reporters it shipped */

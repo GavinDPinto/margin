@@ -114,6 +114,22 @@ assert(/Thank you so much/.test(rm.htmlBody) && /decided not to add this/.test(r
 const rrow = sheetRows.find(r => r[0] === u3.get('id'));
 assert(rrow[2] === 'rejected' && /syncing/.test(rrow[15]) && rrow[13], 'sheet stores status, owner note, notified time');
 assert(ctx.decide(u3.get('id'), u3.get('sig'), 'reject', 'again', true).ok === false && mails.length === before + 1, 'no second rejection email');
+// reject AFTER approving (not shipped yet) → allowed, emails reporter, closes issue as not planned
+post({ id: 'late-1', kind: 'feature', title: 'Collab', description: 'sync', email: 'late@example.com', notify: true });
+const u4 = new URL(/href="([^"]+)&do=approve"/.exec(mails[mails.length - 1].htmlBody)[1]).searchParams;
+issueState = { state: 'open', labels: [{ name: 'needs-owner' }] };
+assert(ctx.decide(u4.get('id'), u4.get('sig'), 'approve').ok, 'late: approve first');
+const lp = ctx.doGet({ parameter: { a: 'review', id: u4.get('id'), sig: u4.get('sig') } }).html;
+assert(/You approved this earlier/.test(lp) && /Reject with a reason/.test(lp), 'late: review page offers reject after approval');
+const nb = mails.length;
+const lr = ctx.decide(u4.get('id'), u4.get('sig'), 'reject', 'Needs a server, sorry!', true);
+assert(lr.ok && lr.emailed && mails[mails.length - 1].to === 'late@example.com' && mails.length === nb + 1, 'late: reject emails reporter');
+assert(gh.some(x => x[0] === 'PATCH' && /issues\/7$/.test(x[1]) && x[2].state_reason === 'not_planned') && gh.some(x => x[0] === 'DELETE' && /labels\/needs-owner/.test(x[1])), 'late: closes issue not planned + removes queue labels');
+issueState = { state: 'closed', labels: [{ name: 'shipped' }] };
+post({ id: 'late-2', kind: 'feature', title: 'Done thing', description: 'x', email: 'd@example.com', notify: true });
+const u5 = new URL(/href="([^"]+)&do=approve"/.exec(mails[mails.length - 1].htmlBody)[1]).searchParams;
+ctx.decide(u5.get('id'), u5.get('sig'), 'approve');
+assert(ctx.decide(u5.get('id'), u5.get('sig'), 'reject', 'x', true).ok === false, 'late: cannot reject once shipped');
 post({ id: 'rej-1', kind: 'bug', title: 'meh', description: 'x', email: '', notify: true });
 const u2 = new URL(/href="([^"]+)&do=approve"/.exec(mails.find(m => /meh/.test(m.subject)).htmlBody)[1]).searchParams;
 const nm = mails.length;
