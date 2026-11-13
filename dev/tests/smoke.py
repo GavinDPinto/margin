@@ -203,6 +203,20 @@ async def main():
                 await page.click('#btn-feedback'); await page.wait_for_timeout(200)
                 configured = await J(page, "!!document.querySelector('.modal .fb-form')")
                 check('feedback dialog opens', configured or await J(page, "(document.querySelector('.modal h3')||{}).textContent==='Feedback isn’t set up yet'"))
+                if configured:
+                    await page.fill('.fb-title', 'Bug title'); await page.fill('.fb-desc', 'Bug details')
+                    await page.click('.fb-kind [data-k="feature"]')
+                    blank = await J(page, "[document.querySelector('.fb-title').value, document.querySelector('.fb-desc').value]") == ['', '']
+                    await page.fill('.fb-title', 'Idea title')
+                    await page.click('.fb-kind [data-k="bug"]')
+                    bug_back = await J(page, "[document.querySelector('.fb-title').value, document.querySelector('.fb-desc').value]") == ['Bug title', 'Bug details']
+                    await page.click('.fb-kind [data-k="feature"]')
+                    feat_back = await J(page, "document.querySelector('.fb-title').value") == 'Idea title'
+                    check('feedback: bug and feature keep separate drafts', blank and bug_back and feat_back)
+                    await page.fill('.fb-title', '')
+                    await page.click('.modal .mbtns .btn.primary'); await page.wait_for_timeout(300)
+                    check('feedback: error shows once, as the red line only', await J(page, "!document.querySelector('.fb-err').hidden && !document.getElementById('toast').classList.contains('show')"))
+                    await page.screenshot(path=str(SHOTS / 'feedback-error.png'))
                 await page.click('.modal .btn:has-text("Cancel")' if configured else '.modal .btn:has-text("OK")')
 
             # ---------- persistence ----------

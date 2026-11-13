@@ -5,7 +5,7 @@
    Margin — a local-first handwritten notes app
    ===================================================================== */
 
-const APP_VERSION = '8 · red feedback errors';
+const APP_VERSION = '9 · separate bug/feature drafts, one error notice';
 // Google Apps Script web-app URL that receives feedback (see feedback/SETUP.md). Empty = feedback not set up yet.
 const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec';
 const PAGE_W = 816, PAGE_H = 1056;          // page units (Letter @ 96dpi)
@@ -1997,7 +1997,8 @@ async function shrinkImage(file) {
 async function feedbackDialog() {
   if (!FEEDBACK_URL) { modal({ title: 'Feedback isn’t set up yet', body: '<p>The developer hasn’t connected the feedback service yet. Please check back soon.</p>', buttons: [{ label: 'OK', primary: true, value: true }] }); return; }
   let saved = {}; try { saved = JSON.parse(localStorage.getItem('margin.fb') || '{}'); } catch (e) {}
-  const st = { kind: 'bug', files: [], page: E.open };
+  // each type keeps its own draft, so switching starts blank and switching back restores it
+  const st = { kind: 'bug', files: [], page: E.open, drafts: { bug: { title: '', desc: '', files: [] }, feature: { title: '', desc: '', files: [] } } };
   const body = document.createElement('div'); body.className = 'fb-form';
   body.innerHTML = `
     <div class="seg fb-kind"><button data-k="bug" class="on">${icon('bug')}Report a bug</button><button data-k="feature">${icon('bulb')}Suggest a feature</button></div>
@@ -2013,12 +2014,18 @@ async function feedbackDialog() {
   const drawFiles = () => {
     $('.fb-files', body).innerHTML = st.files.map((f, i) => `<span class="fb-chip">${icon(/^video/.test(f.type) ? 'video' : 'image')}<span>${esc(f.name || 'file')}</span><small>${(f.size / 1048576).toFixed(1)} MB</small><button data-rm="${i}" aria-label="Remove">${icon('x')}</button></span>`).join('');
   };
-  const setKind = k => { st.kind = k; $$('.fb-kind button', body).forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  const setKind = k => {
+    if (k !== st.kind) {
+      const t = $('.fb-title', body), d = $('.fb-desc', body);
+      st.drafts[st.kind] = { title: t.value, desc: d.value, files: st.files };
+      const n = st.drafts[k]; t.value = n.title; d.value = n.desc; st.files = n.files; drawFiles(); err('');
+    }
+    st.kind = k; $$('.fb-kind button', body).forEach(b => b.classList.toggle('on', b.dataset.k === k));
     $('.fb-dlbl', body).textContent = k === 'bug' ? 'What happened? What did you expect?' : 'What would you like Margin to do?';
     $('.fb-desc', body).placeholder = k === 'bug' ? 'Steps to reproduce help a lot' : 'Describe the feature and how you’d use it'; };
   const err = m => {
     const e = $('.fb-err', body); e.textContent = m || ''; e.hidden = !m;
-    if (m) { try { e.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (x) {} toast(m, 5000); }
+    if (m) { try { e.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (x) {} }
   };
   body.addEventListener('click', async e => {
     const k = e.target.closest('[data-k]'); if (k) { setKind(k.dataset.k); return; }
