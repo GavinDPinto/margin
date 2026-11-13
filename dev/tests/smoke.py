@@ -126,8 +126,21 @@ async def main():
             h = await J(page, "(()=>{const r=document.querySelector('.sel-handle.h-tl').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()")
             await drag(page, 'touch', 34, [h, [h[0] - 30, h[1] - 10], [h[0] - 60, h[1] - 20]])
             check('resize selection (finger)', await J(page, '__margin.E.sel.bb[2]-__margin.E.sel.bb[0]') > w0 + 10)
+            # rotate: drag the round handle a quarter turn around the selection's centre
+            pre = await J(page, "(()=>{const s=__margin.E.sel,st=s.v.page.strokes.find(q=>s.ids.has(q.id));return {id:st.id,x:st.p[0],y:st.p[1],cx:(s.bb[0]+s.bb[2])/2,cy:(s.bb[1]+s.bb[3])/2,w:s.bb[2]-s.bb[0],h:s.bb[3]-s.bb[1]}})()")
+            check('rotate handle shown for ink selection', await J(page, "!!document.querySelector('.sel-handle.h-rot')"))
+            h = await J(page, "(()=>{const r=document.querySelector('.sel-handle.h-rot').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2]})()")
+            c = await J(page, "(()=>{const s=__margin.E.sel,r=s.v.el.getBoundingClientRect();return [r.left+(s.bb[0]+s.bb[2])/2*__margin.E.s, r.top+(s.bb[1]+s.bb[3])/2*__margin.E.s]})()")
+            rr = math.hypot(h[0] - c[0], h[1] - c[1]); a0 = math.atan2(h[1] - c[1], h[0] - c[0])
+            await drag(page, 'pen', 7, [[c[0] + rr * math.cos(a0 + t), c[1] + rr * math.sin(a0 + t)] for t in [0, 0.3, 0.8, 1.2, math.pi / 2 + 0.03]])   # lands 1.7° off: snaps to exactly 90°
+            post = await J(page, f"(()=>{{const s=__margin.E.sel,st=s.v.page.strokes.find(q=>q.id==='{pre['id']}');return {{x:st.p[0],y:st.p[1],w:s.bb[2]-s.bb[0],h:s.bb[3]-s.bb[1]}}}})()")
+            ex, ey = pre['cx'] - (pre['y'] - pre['cy']), pre['cy'] + (pre['x'] - pre['cx'])
+            check('rotate selection a quarter turn (snaps to 90°)', math.hypot(post['x'] - ex, post['y'] - ey) < 0.5 and abs(post['w'] - pre['h']) < 2 and abs(post['h'] - pre['w']) < 2, f"{post} vs {ex:.1f},{ey:.1f}")
+            await page.screenshot(path=str(SHOTS / 'rotate.png'))
             await tap(page, '.sel-bar [data-sa="done"]', 'pen')
             check('done clears selection', not await J(page, '!!__margin.E.sel'))
+            await page.click('#ed-undo')
+            check('undo rotate', await J(page, f"(()=>{{const st=__margin.E.pages[0].strokes.find(q=>q.id==='{pre['id']}');return Math.hypot(st.p[0]-{pre['x']},st.p[1]-{pre['y']})}})()") < 0.05)
 
             # ---------- rectangle lasso: drag corner to corner ----------
             await page.click('#tb-opts [data-lmode="rect"]')

@@ -7,7 +7,7 @@ import { drawStroke } from '../editor/render.js';
 import { buildTexts, textEl } from '../editor/text.js';
 import { stopMomentum } from '../input/gestures.js';
 import { roundPts, strokeBB } from '../input/ink.js';
-import { D, attachLive, clearLive } from '../input/pointer.js';
+import { D, attachLive, clearLive, toPage } from '../input/pointer.js';
 import { L } from '../library/library.js';
 import { copySelection, hidePasteBar, showPasteBar } from '../selection/clipboard.js';
 import { drawCrop, drawImages, removeCropUI, startCrop } from '../selection/images.js';
@@ -81,21 +81,29 @@ export function selBB(v, ids, tids, iids) {
   for (const im of pageImages(v.page)) if (iids && iids.has(im.id)) add(imgBB(im));
   return b;
 }
-export const selXf = s => ({ k: s.k || 1, ax: s.ax || 0, ay: s.ay || 0, dx: s.dx || 0, dy: s.dy || 0 });
-export const xfPt = (f, x, y) => [f.ax + (x - f.ax) * f.k + f.dx, f.ay + (y - f.ay) * f.k + f.dy];
+export const selXf = s => ({ k: s.k || 1, ax: s.ax || 0, ay: s.ay || 0, dx: s.dx || 0, dy: s.dy || 0, r: s.r || 0, rx: s.rx || 0, ry: s.ry || 0 });
+export function xfPt(f, x, y) {   // scale about (ax, ay), move by (dx, dy), then turn by r about (rx, ry)
+  const px = f.ax + (x - f.ax) * f.k + f.dx, py = f.ay + (y - f.ay) * f.k + f.dy;
+  if (!f.r) return [px, py];
+  const c = Math.cos(f.r), sn = Math.sin(f.r), ux = px - f.rx, uy = py - f.ry;
+  return [f.rx + ux * c - uy * sn, f.ry + ux * sn + uy * c];
+}
 export function drawSelection() {
   const s = E.sel; if (!s || !s.v.canvas || E.crop) return;
   const ctx = attachLive(s.v), p = s.v.page, f = selXf(s);
   if (p.strokes.some(st => st.t === 'hl' && s.ids.has(st.id))) live.style.mixBlendMode = 'multiply';
-  ctx.save(); ctx.translate(f.dx, f.dy); ctx.translate(f.ax, f.ay); ctx.scale(f.k, f.k); ctx.translate(-f.ax, -f.ay);
+  ctx.save();
+  if (f.r) { ctx.translate(f.rx, f.ry); ctx.rotate(f.r); ctx.translate(-f.rx, -f.ry); }
+  ctx.translate(f.dx, f.dy); ctx.translate(f.ax, f.ay); ctx.scale(f.k, f.k); ctx.translate(-f.ax, -f.ay);
   drawImages(ctx, p, null, s.iids, s.v);
   ctx.shadowColor = 'rgba(45,91,227,.55)'; ctx.shadowBlur = 5 * s.v.k;
   for (const st of p.strokes) if (st.t === 'hl' && s.ids.has(st.id)) drawStroke(ctx, st);
   for (const st of p.strokes) if (st.t !== 'hl' && s.ids.has(st.id)) drawStroke(ctx, st);
   ctx.restore();
-  const [x0, y0] = xfPt(f, s.bb[0], s.bb[1]), [x1, y1] = xfPt(f, s.bb[2], s.bb[3]), pad = 6 / E.s;
+  const pad = 6 / E.s, [x0, y0] = xfPt({ ...f, r: 0 }, s.bb[0], s.bb[1]), [x1, y1] = xfPt({ ...f, r: 0 }, s.bb[2], s.bb[3]), turn = { k: 1, ax: 0, ay: 0, dx: 0, dy: 0, r: f.r, rx: f.rx, ry: f.ry };
+  const Q = [[x0 - pad, y0 - pad], [x1 + pad, y0 - pad], [x1 + pad, y1 + pad], [x0 - pad, y1 + pad]].map(([x, y]) => xfPt(turn, x, y));
   ctx.save(); ctx.setLineDash([5 / E.s, 4 / E.s]); ctx.lineWidth = 1.3 / E.s; ctx.strokeStyle = 'rgba(45,91,227,.95)';
-  ctx.strokeRect(x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2); ctx.restore();
+  ctx.beginPath(); Q.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.stroke(); ctx.restore();
   for (const t of p.texts) {
     if (!s.tids.has(t.id)) continue; const el = textEl(s.v, t.id); if (!el) continue;
     const [nx, ny] = xfPt(f, t.x, t.y); el.style.transformOrigin = '0 0';
@@ -106,7 +114,7 @@ export function queueMoveFrame() { if (D.raf) return; D.raf = requestAnimationFr
 export function commitSelTransform(before) {
   const s = E.sel; if (!s) return;
   const f = selXf(s), p = s.v.page;
-  if (Math.abs(f.k - 1) < 0.001 && Math.abs(f.dx) < 0.01 && Math.abs(f.dy) < 0.01) { s.k = 1; s.dx = s.dy = 0; drawSelection(); showSelBar(); return; }
+  if (Math.abs(f.k - 1) < 0.001 && Math.abs(f.dx) < 0.01 && Math.abs(f.dy) < 0.01 && Math.abs(f.r) < 0.0005) { s.k = 1; s.dx = s.dy = 0; s.r = 0; drawSelection(); showSelBar(); return; }
   p.strokes = p.strokes.map(st => {
     if (!s.ids.has(st.id)) return st;
     const P = st.p.slice(); for (let i = 0; i < P.length; i += 3) { const q = xfPt(f, P[i], P[i + 1]); P[i] = q[0]; P[i + 1] = q[1]; }
@@ -115,7 +123,7 @@ export function commitSelTransform(before) {
   p.texts.forEach(t => { if (!s.tids.has(t.id)) return; const q = xfPt(f, t.x, t.y); t.x = q[0]; t.y = q[1]; t.w = t.w * f.k; t.s = Math.max(6, Math.round(t.s * f.k * 10) / 10); });
   p.images = pageImages(p).map(im => { if (!s.iids.has(im.id)) return im; const q = xfPt(f, im.x, im.y); return { ...im, x: q[0], y: q[1], w: im.w * f.k, h: im.h * f.k }; });
   pushUndo({ k: 'page', id: p.id, before, after: snap(p) });
-  s.k = 1; s.dx = s.dy = 0; s.ax = s.ay = 0;
+  s.k = 1; s.dx = s.dy = 0; s.ax = s.ay = 0; s.r = 0;
   buildTexts(s.v); s.bb = selBB(s.v, s.ids, s.tids, s.iids); renderPage(s.v); drawSelection(); showSelBar();
 }
 export function finishMove() { commitSelTransform(D.before); }
@@ -139,7 +147,8 @@ export function showSelBar() {
     + `<button data-sa="del">${icon('trash')}Delete</button><button data-sa="done" aria-label="Done">${icon('check')}</button>`;
   bindBarTap(bar, b => selAction(b.dataset.sa, b));
   s.v.el.appendChild(bar); s.bar = bar;
-  s.handles = ['tl', 'tr', 'bl', 'br'].map(h => { const d = document.createElement('div'); d.className = 'sel-handle h-' + h; d.dataset.h = h; s.v.el.appendChild(d); return d; });
+  const hs = ['tl', 'tr', 'bl', 'br']; if (canRotate(s)) hs.push('rot');
+  s.handles = hs.map(h => { const d = document.createElement('div'); d.className = 'sel-handle h-' + h; d.dataset.h = h; if (h === 'rot') { d.innerHTML = icon('rotate'); d.title = 'Drag to rotate'; } s.v.el.appendChild(d); return d; });
   positionSelBar();
 }
 export function positionSelBar() {
@@ -150,7 +159,8 @@ export function positionSelBar() {
   s.bar.classList.toggle('below', top < 56);
   s.bar.style.left = clamp(cx, bw / 2 + 4, Math.max(bw / 2 + 4, pw - bw / 2 - 4)) + 'px';
   s.bar.style.top = (top < 56 ? b[3] * S + pad + 8 : top) + 'px';
-  const pos = { tl: [b[0] * S - pad, b[1] * S - pad], tr: [b[2] * S + pad, b[1] * S - pad], bl: [b[0] * S - pad, b[3] * S + pad], br: [b[2] * S + pad, b[3] * S + pad] };
+  const pos = { tl: [b[0] * S - pad, b[1] * S - pad], tr: [b[2] * S + pad, b[1] * S - pad], bl: [b[0] * S - pad, b[3] * S + pad], br: [b[2] * S + pad, b[3] * S + pad],
+    rot: [b[2] * S + pad + 30 < pw - 8 ? b[2] * S + pad + 30 : b[0] * S - pad - 30, (b[1] + b[3]) / 2 * S] };   // rotate handle: out to the right (left near the page edge), clear of the bar
   for (const h of s.handles || []) { const q = pos[h.dataset.h]; h.style.left = q[0] + 'px'; h.style.top = q[1] + 'px'; }
 }
 export function setSelChrome(on) { const s = E.sel; if (!s) return; if (s.bar) s.bar.style.visibility = on ? '' : 'hidden'; (s.handles || []).forEach(h => h.style.visibility = on ? '' : 'hidden'); }
@@ -170,6 +180,12 @@ export function startHandleDrag(e, h) {
   try { sc().setPointerCapture(e.pointerId); } catch (err) {}
   if (h.classList.contains('crop-handle')) { D.mode = 'crop'; return; }
   const s = E.sel; if (!s) { D.active = false; return; }
+  if (D.h === 'rot') {
+    D.mode = 'rotate'; D.before = snap(v.page); s.k = 1; s.dx = s.dy = 0; s.r = 0;
+    s.rx = (s.bb[0] + s.bb[2]) / 2; s.ry = (s.bb[1] + s.bb[3]) / 2;
+    const { x, y } = toPage(e); D.a0 = Math.atan2(y - s.ry, x - s.rx);
+    setSelChrome(false); return;
+  }
   D.mode = 'resize'; D.before = snap(v.page);
   const b = s.bb, C = { tl: [b[0], b[1]], tr: [b[2], b[1]], bl: [b[0], b[3]], br: [b[2], b[3]] }, opp = { tl: 'br', tr: 'bl', bl: 'tr', br: 'tl' };
   D.corner = C[D.h]; s.ax = C[opp[D.h]][0]; s.ay = C[opp[D.h]][1]; s.k = 1; s.dx = s.dy = 0;
@@ -180,6 +196,15 @@ export function moveResize(x, y) {
   let k = ((x - s.ax) * vx + (y - s.ay) * vy) / l2;
   k = clamp(k, 14 / Math.max(1, Math.abs(vx), Math.abs(vy)), 25);
   s.k = k; queueMoveFrame();
+}
+/* rotate: ink-only selections get a round handle; drag it around the centre. Snaps level at every 45°. */
+export const canRotate = s => s.ids.size > 0 && !s.tids.size && !s.iids.size;
+export function moveRotate(x, y) {
+  const s = E.sel, step = Math.PI / 4;
+  let r = Math.atan2(y - s.ry, x - s.rx) - D.a0;
+  r = Math.atan2(Math.sin(r), Math.cos(r));                     // keep in -180°..180°
+  const near = Math.round(r / step) * step; if (Math.abs(r - near) < 3 * Math.PI / 180) r = near;
+  s.r = r; queueMoveFrame();
 }
 export function selAction(a, btn) {
   const s = E.sel; if (!s) return;

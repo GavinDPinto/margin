@@ -1302,6 +1302,23 @@ canvas.live {
   border-radius: 4px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
 }
+.sel-handle.h-rot {
+  cursor: grab;
+  color: var(--accent);
+}
+.sel-handle.h-rot::after {
+  display: none;
+}
+.sel-handle.h-rot .ic {
+  width: 16px;
+  height: 16px;
+  padding: 4px;
+  box-sizing: content-box;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+}
 .h-tl,
 .h-br {
   cursor: nwse-resize;
@@ -1711,7 +1728,7 @@ textarea.inp {
   }
 
   // src/js/core/version.js
-  var APP_VERSION = "16 · resize snapped shapes";
+  var APP_VERSION = "17 · rotate selections";
   var FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec";
 
   // src/js/ui/dialogs.js
@@ -2719,14 +2736,24 @@ textarea.inp {
     for (const im of pageImages(v.page)) if (iids && iids.has(im.id)) add(imgBB(im));
     return b;
   }
-  var selXf = (s) => ({ k: s.k || 1, ax: s.ax || 0, ay: s.ay || 0, dx: s.dx || 0, dy: s.dy || 0 });
-  var xfPt = (f, x, y) => [f.ax + (x - f.ax) * f.k + f.dx, f.ay + (y - f.ay) * f.k + f.dy];
+  var selXf = (s) => ({ k: s.k || 1, ax: s.ax || 0, ay: s.ay || 0, dx: s.dx || 0, dy: s.dy || 0, r: s.r || 0, rx: s.rx || 0, ry: s.ry || 0 });
+  function xfPt(f, x, y) {
+    const px = f.ax + (x - f.ax) * f.k + f.dx, py = f.ay + (y - f.ay) * f.k + f.dy;
+    if (!f.r) return [px, py];
+    const c = Math.cos(f.r), sn = Math.sin(f.r), ux = px - f.rx, uy = py - f.ry;
+    return [f.rx + ux * c - uy * sn, f.ry + ux * sn + uy * c];
+  }
   function drawSelection() {
     const s = E.sel;
     if (!s || !s.v.canvas || E.crop) return;
     const ctx = attachLive(s.v), p = s.v.page, f = selXf(s);
     if (p.strokes.some((st) => st.t === "hl" && s.ids.has(st.id))) live.style.mixBlendMode = "multiply";
     ctx.save();
+    if (f.r) {
+      ctx.translate(f.rx, f.ry);
+      ctx.rotate(f.r);
+      ctx.translate(-f.rx, -f.ry);
+    }
     ctx.translate(f.dx, f.dy);
     ctx.translate(f.ax, f.ay);
     ctx.scale(f.k, f.k);
@@ -2737,12 +2764,16 @@ textarea.inp {
     for (const st of p.strokes) if (st.t === "hl" && s.ids.has(st.id)) drawStroke(ctx, st);
     for (const st of p.strokes) if (st.t !== "hl" && s.ids.has(st.id)) drawStroke(ctx, st);
     ctx.restore();
-    const [x0, y0] = xfPt(f, s.bb[0], s.bb[1]), [x1, y1] = xfPt(f, s.bb[2], s.bb[3]), pad = 6 / E.s;
+    const pad = 6 / E.s, [x0, y0] = xfPt({ ...f, r: 0 }, s.bb[0], s.bb[1]), [x1, y1] = xfPt({ ...f, r: 0 }, s.bb[2], s.bb[3]), turn = { k: 1, ax: 0, ay: 0, dx: 0, dy: 0, r: f.r, rx: f.rx, ry: f.ry };
+    const Q = [[x0 - pad, y0 - pad], [x1 + pad, y0 - pad], [x1 + pad, y1 + pad], [x0 - pad, y1 + pad]].map(([x, y]) => xfPt(turn, x, y));
     ctx.save();
     ctx.setLineDash([5 / E.s, 4 / E.s]);
     ctx.lineWidth = 1.3 / E.s;
     ctx.strokeStyle = "rgba(45,91,227,.95)";
-    ctx.strokeRect(x0 - pad, y0 - pad, x1 - x0 + pad * 2, y1 - y0 + pad * 2);
+    ctx.beginPath();
+    Q.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.closePath();
+    ctx.stroke();
     ctx.restore();
     for (const t of p.texts) {
       if (!s.tids.has(t.id)) continue;
@@ -2765,9 +2796,10 @@ textarea.inp {
     const s = E.sel;
     if (!s) return;
     const f = selXf(s), p = s.v.page;
-    if (Math.abs(f.k - 1) < 1e-3 && Math.abs(f.dx) < 0.01 && Math.abs(f.dy) < 0.01) {
+    if (Math.abs(f.k - 1) < 1e-3 && Math.abs(f.dx) < 0.01 && Math.abs(f.dy) < 0.01 && Math.abs(f.r) < 5e-4) {
       s.k = 1;
       s.dx = s.dy = 0;
+      s.r = 0;
       drawSelection();
       showSelBar();
       return;
@@ -2802,6 +2834,7 @@ textarea.inp {
     s.k = 1;
     s.dx = s.dy = 0;
     s.ax = s.ay = 0;
+    s.r = 0;
     buildTexts(s.v);
     s.bb = selBB(s.v, s.ids, s.tids, s.iids);
     renderPage(s.v);
@@ -2840,10 +2873,16 @@ textarea.inp {
     bindBarTap(bar, (b) => selAction(b.dataset.sa, b));
     s.v.el.appendChild(bar);
     s.bar = bar;
-    s.handles = ["tl", "tr", "bl", "br"].map((h) => {
+    const hs = ["tl", "tr", "bl", "br"];
+    if (canRotate(s)) hs.push("rot");
+    s.handles = hs.map((h) => {
       const d = document.createElement("div");
       d.className = "sel-handle h-" + h;
       d.dataset.h = h;
+      if (h === "rot") {
+        d.innerHTML = icon("rotate");
+        d.title = "Drag to rotate";
+      }
       s.v.el.appendChild(d);
       return d;
     });
@@ -2858,7 +2897,13 @@ textarea.inp {
     s.bar.classList.toggle("below", top < 56);
     s.bar.style.left = clamp(cx, bw / 2 + 4, Math.max(bw / 2 + 4, pw - bw / 2 - 4)) + "px";
     s.bar.style.top = (top < 56 ? b[3] * S + pad + 8 : top) + "px";
-    const pos = { tl: [b[0] * S - pad, b[1] * S - pad], tr: [b[2] * S + pad, b[1] * S - pad], bl: [b[0] * S - pad, b[3] * S + pad], br: [b[2] * S + pad, b[3] * S + pad] };
+    const pos = {
+      tl: [b[0] * S - pad, b[1] * S - pad],
+      tr: [b[2] * S + pad, b[1] * S - pad],
+      bl: [b[0] * S - pad, b[3] * S + pad],
+      br: [b[2] * S + pad, b[3] * S + pad],
+      rot: [b[2] * S + pad + 30 < pw - 8 ? b[2] * S + pad + 30 : b[0] * S - pad - 30, (b[1] + b[3]) / 2 * S]
+    };
     for (const h of s.handles || []) {
       const q = pos[h.dataset.h];
       h.style.left = q[0] + "px";
@@ -2917,6 +2962,19 @@ textarea.inp {
       D.active = false;
       return;
     }
+    if (D.h === "rot") {
+      D.mode = "rotate";
+      D.before = snap(v.page);
+      s.k = 1;
+      s.dx = s.dy = 0;
+      s.r = 0;
+      s.rx = (s.bb[0] + s.bb[2]) / 2;
+      s.ry = (s.bb[1] + s.bb[3]) / 2;
+      const { x, y } = toPage(e);
+      D.a0 = Math.atan2(y - s.ry, x - s.rx);
+      setSelChrome(false);
+      return;
+    }
     D.mode = "resize";
     D.before = snap(v.page);
     const b = s.bb, C = { tl: [b[0], b[1]], tr: [b[2], b[1]], bl: [b[0], b[3]], br: [b[2], b[3]] }, opp = { tl: "br", tr: "bl", bl: "tr", br: "tl" };
@@ -2932,6 +2990,16 @@ textarea.inp {
     let k = ((x - s.ax) * vx + (y - s.ay) * vy) / l2;
     k = clamp(k, 14 / Math.max(1, Math.abs(vx), Math.abs(vy)), 25);
     s.k = k;
+    queueMoveFrame();
+  }
+  var canRotate = (s) => s.ids.size > 0 && !s.tids.size && !s.iids.size;
+  function moveRotate(x, y) {
+    const s = E.sel, step = Math.PI / 4;
+    let r = Math.atan2(y - s.ry, x - s.rx) - D.a0;
+    r = Math.atan2(Math.sin(r), Math.cos(r));
+    const near = Math.round(r / step) * step;
+    if (Math.abs(r - near) < 3 * Math.PI / 180) r = near;
+    s.r = r;
     queueMoveFrame();
   }
   function selAction(a, btn) {
@@ -3590,6 +3658,9 @@ textarea.inp {
     } else if (D.mode === "resize") {
       const { x, y } = toPage(e);
       moveResize(x, y);
+    } else if (D.mode === "rotate") {
+      const { x, y } = toPage(e);
+      moveRotate(x, y);
     } else if (D.mode === "crop") {
       const { x, y } = toPage(e);
       moveCrop(x, y);
@@ -3611,9 +3682,10 @@ textarea.inp {
       restoreSnap(D.v.page, D.before);
       renderPage(D.v);
     }
-    if ((D.mode === "move" || D.mode === "resize") && E.sel) {
+    if ((D.mode === "move" || D.mode === "resize" || D.mode === "rotate") && E.sel) {
       E.sel.dx = E.sel.dy = 0;
       E.sel.k = 1;
+      E.sel.r = 0;
       drawSelection();
       showSelBar();
     } else if (D.mode === "crop") {
@@ -3663,6 +3735,7 @@ textarea.inp {
         break;
       case "move":
       case "resize":
+      case "rotate":
         finishMove();
         break;
       case "crop":
@@ -5569,6 +5642,7 @@ ${xref}
     scissors: '<circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><path d="M8.2 7.6 20 17M8.2 16.4 20 7"/>',
     paste: '<rect x="6" y="4.5" width="12" height="16" rx="2"/><path d="M9.5 4.5V3.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v.7"/><path d="M9.5 10h5M9.5 14h5"/>',
     crop: '<path d="M6 2.5V17a1 1 0 0 0 1 1h14.5"/><path d="M2.5 6H17a1 1 0 0 1 1 1v14.5"/>',
+    rotate: '<path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/>',
     image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.7"/><path d="m20.5 16-5-5-9 8.5"/>'
   };
   var icon = (n, cls = "") => `<svg viewBox="0 0 24 24" class="ic ${cls}" aria-hidden="true">${ICON[n] || ""}</svg>`;

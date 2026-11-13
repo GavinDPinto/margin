@@ -8,7 +8,7 @@ import { onTouchDown, onTouchMove, onTouchUp, stopMomentum } from '../input/gest
 import { addInkPoint, beginInk, commitInk, drawLiveInk } from '../input/ink.js';
 import { disarmHold, holdMove, moveSnapped } from '../input/shapes.js';
 import { drawCrop, moveCrop, positionCropUI } from '../selection/images.js';
-import { beginLasso, clearSelection, drawSelection, finishLasso, finishMove, moveResize, queueLassoFrame, queueMoveFrame, showSelBar, startHandleDrag } from '../selection/selection.js';
+import { beginLasso, clearSelection, drawSelection, finishLasso, finishMove, moveResize, moveRotate, queueLassoFrame, queueMoveFrame, showSelBar, startHandleDrag } from '../selection/selection.js';
 import { toast } from '../ui/dialogs.js';
 
 /* =====================================================================
@@ -88,6 +88,7 @@ export function onPointerMove(e) {
   }
   else if (D.mode === 'move') { const { x, y } = toPage(e); E.sel.dx = x - D.mx; E.sel.dy = y - D.my; queueMoveFrame(); }
   else if (D.mode === 'resize') { const { x, y } = toPage(e); moveResize(x, y); }
+  else if (D.mode === 'rotate') { const { x, y } = toPage(e); moveRotate(x, y); }
   else if (D.mode === 'crop') { const { x, y } = toPage(e); moveCrop(x, y); }
 }
 export function onPointerUp(e) {
@@ -98,7 +99,7 @@ export function onPointerUp(e) {
 export function cancelDraw() {
   if (!D.active) return;
   if (D.mode === 'erase' && D.changed) { restoreSnap(D.v.page, D.before); renderPage(D.v); }
-  if ((D.mode === 'move' || D.mode === 'resize') && E.sel) { E.sel.dx = E.sel.dy = 0; E.sel.k = 1; drawSelection(); showSelBar(); }
+  if ((D.mode === 'move' || D.mode === 'resize' || D.mode === 'rotate') && E.sel) { E.sel.dx = E.sel.dy = 0; E.sel.k = 1; E.sel.r = 0; drawSelection(); showSelBar(); }
   else if (D.mode === 'crop') { drawCrop(); }
   else clearLive();
   if (D.raf) { cancelAnimationFrame(D.raf); D.raf = 0; }
@@ -115,7 +116,7 @@ export function endDraw(e, cancelled) {
     case 'ink': disarmHold(); if (e && !cancelled && !D.shape) addInkPoint(e, true); commitInk(); D.shape = null; break;
     case 'erase': clearLive(); if (D.needRender) { D.needRender = false; renderPage(v); } if (D.changed) pushUndo({ k: 'page', id: v.page.id, before: D.before, after: snap(v.page) }); break;
     case 'lasso': finishLasso(); break;
-    case 'move': case 'resize': finishMove(); break;
+    case 'move': case 'resize': case 'rotate': finishMove(); break;
     case 'crop': drawCrop(); positionCropUI(); break;
     case 'text': if (!cancelled && D.moved < 10) { if (E.activeText) commitActiveText(); else createTextBox(v, D.tx, D.ty); } break;
   }
