@@ -5,7 +5,7 @@
    Margin — a local-first handwritten notes app
    ===================================================================== */
 
-const APP_VERSION = '7 · clearer feedback errors';
+const APP_VERSION = '8 · red feedback errors';
 // Google Apps Script web-app URL that receives feedback (see feedback/SETUP.md). Empty = feedback not set up yet.
 const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec';
 const PAGE_W = 816, PAGE_H = 1056;          // page units (Letter @ 96dpi)
