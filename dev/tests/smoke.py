@@ -229,6 +229,35 @@ async def main():
             await page.click('#tb-opts [data-act="shapes"]'); await J(page, "__margin.setTool('pen')")
             await page.screenshot(path=str(SHOTS / 'shapes.png'))
 
+            # ---------- scribble to erase: zig-zag over ink with the pen erases it ----------
+            def zigzag(x0, y0, w, h, passes=12):
+                pts = []
+                for k in range(passes):
+                    ya, yb = (y0, y0 + h) if k % 2 == 0 else (y0 + h, y0)
+                    xa, xb = x0 + w * k / passes, x0 + w * (k + 1) / passes
+                    pts += [[xa + (xb - xa) * t / 5, ya + (yb - ya) * t / 5] for t in range(5)]
+                return pts
+            check('scribble toggle shown for pen', await J(page, "!!document.querySelector('#tb-opts [data-act=\"scribble\"].on')"))
+            sx, sy = ox + 480, oy + 20
+            n0 = await strokes(page)
+            await drag(page, 'pen', 7, wave(sx, sy, 200))
+            await drag(page, 'pen', 7, [[sx + 100, sy - 30], [sx + 102, sy + 10], [sx + 104, sy + 50]])   # plain line across the word stays
+            check('crossing a word with a line keeps both', await strokes(page) == n0 + 2)
+            await drag(page, 'pen', 7, zigzag(sx - 10, sy - 18, 220, 36))
+            left = await J(page, f"__margin.E.pages[__margin.E.cur].strokes.slice({n0}).map(s=>s.p.length/3)")
+            check('scribble erases the word under it, not the line mostly outside it', len(left) == 1 and left[0] <= 5, str(left))
+            await page.click('#ed-undo'); check('undo brings scribbled ink back', await strokes(page) == n0 + 2)
+            await drag(page, 'pen', 7, zigzag(sx, sy + 140, 200, 30))
+            check('scribble on empty paper stays as ink', await strokes(page) == n0 + 3)
+            await drag(page, 'pen', 7, [[sx + 100, sy + 240]])                       # a small dot
+            await drag(page, 'pen', 7, zigzag(sx, sy + 225, 200, 30))                 # zig-zag letters written over it
+            check('zig-zag writing over a stray dot keeps both', await strokes(page) == n0 + 5)
+            await page.click('#tb-opts [data-act="scribble"]'); await page.wait_for_timeout(100)
+            await drag(page, 'pen', 7, zigzag(sx - 10, sy - 18, 220, 36))
+            check('scribble to erase off: scribble is just ink', not await J(page, '__margin.SET.scribble') and await strokes(page) == n0 + 6)
+            await page.click('#tb-opts [data-act="scribble"]')
+            await page.screenshot(path=str(SHOTS / 'scribble.png'))
+
             # ---------- touch gestures ----------
             await page.evaluate("document.getElementById('scroller').scrollTop = 0"); await page.wait_for_timeout(100)
             await ev(page, 'pointerdown', 31, 'touch', 600, 700)
