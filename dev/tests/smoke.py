@@ -161,6 +161,56 @@ async def main():
             await page.click('.modal .tpl[data-t="lined"]'); await page.click('.modal [data-sp="24"]'); await page.click('.modal .btn:has-text("This page")'); await page.wait_for_timeout(200)
             check('page style dialog', await J(page, '__margin.E.pages[__margin.E.cur].template') == 'lined')
 
+            # ---------- shapes: draw, hold still, and it snaps (line / rectangle / ellipse) ----------
+            async def hold_draw(ptype, pid, pts, hold=True, after=None):
+                await ev(page, 'pointerdown', pid, ptype, *pts[0])
+                for q in pts[1:]: await ev(page, 'pointermove', pid, ptype, *q)
+                if hold: await page.wait_for_timeout(700)
+                for q in after or []: await ev(page, 'pointermove', pid, ptype, *q)
+                await ev(page, 'pointerup', pid, ptype, *(after or pts)[-1]); await page.wait_for_timeout(80)
+            last = lambda: J(page, '(()=>{const s=__margin.E.pages[__margin.E.cur].strokes;return s[s.length-1]})()')
+            def pts_of(st): P = st['p']; return [(P[i], P[i + 1]) for i in range(0, len(P), 3)]
+            def line_dev(st):
+                q = pts_of(st); (ax, ay), (bx, by) = q[0], q[-1]; L = math.hypot(bx - ax, by - ay) or 1
+                return max(abs((bx - ax) * (ay - y) - (ax - x) * (by - ay)) / L for x, y in q)
+            def on_box(st):
+                q = pts_of(st); xs = [x for x, _ in q]; ys = [y for _, y in q]; x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+                return max(min(abs(x - x0), abs(x - x1), abs(y - y0), abs(y - y1)) for x, y in q)
+            def on_ellipse(st):
+                q = pts_of(st); xs = [x for x, _ in q]; ys = [y for _, y in q]
+                cx, cy, rx, ry = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, (max(xs) - min(xs)) / 2, (max(ys) - min(ys)) / 2
+                return max(abs(math.hypot((x - cx) / rx, (y - cy) / ry) - 1) for x, y in q)
+            await J(page, "__margin.setTool('pen')")
+            if not await J(page, '__margin.SET.shapes'): await page.click('#tb-opts [data-act="shapes"]')
+            check('shapes toggle shown for pen', await J(page, "!!document.querySelector('#tb-opts .shp.on')"))
+            r = await J(page, '(()=>{const v=__margin.E.views.get(__margin.E.pages[__margin.E.cur].id).el.getBoundingClientRect();return [v.left, Math.max(v.top, 140)]})()')
+            ox, oy = r[0] + 80, r[1] + 40
+            n0 = await strokes(page)
+            await hold_draw('pen', 7, [[ox + 4 * i, oy + 3 * math.sin(i / 3) + i * 0.6] for i in range(60)])
+            st = await last()
+            check('hold snaps a wobbly line straight', await strokes(page) == n0 + 1 and line_dev(st) < 0.6, f'dev {line_dev(st):.2f}')
+            await page.click('#ed-undo'); check('undo removes the snapped line in one step', await strokes(page) == n0)
+            await hold_draw('pen', 7, [[ox + 4 * i, oy + 3 * math.sin(i / 3)] for i in range(40)], after=[[ox + 200, oy + 60], [ox + 260, oy + 90]])
+            st = await last(); q = pts_of(st)
+            check('snapped line follows the pen until lifted', line_dev(st) < 0.6 and abs(q[-1][0] - q[0][0] - (260 + 0) / await J(page, '__margin.E.s') ) < 3, f'{q[0]} -> {q[-1]}')
+            box = [[ox, oy + 80], [ox + 200, oy + 83], [ox + 197, oy + 200], [ox + 2, oy + 196], [ox + 3, oy + 86]]
+            boxpts = [[a[0] + (b[0] - a[0]) * t / 20 + 2 * math.sin(t), a[1] + (b[1] - a[1]) * t / 20 + 2 * math.cos(t)] for a, b in zip(box, box[1:]) for t in range(20)]
+            await hold_draw('pen', 7, boxpts)
+            st = await last(); check('hold snaps a rough rectangle', on_box(st) < 0.6 and len(st['p']) > 60, f'off-edge {on_box(st):.2f}')
+            circ = [[ox + 340 + 70 * math.cos(a) * (1 + 0.05 * math.sin(3 * a)), oy + 140 + 55 * math.sin(a)] for a in [i / 40 * 2 * math.pi for i in range(44)]]
+            await hold_draw('pen', 7, circ)
+            st = await last(); check('hold snaps a rough ellipse', on_ellipse(st) < 0.02, f'err {on_ellipse(st):.3f}')
+            await hold_draw('pen', 7, [[x, y + 160] for x, y in boxpts], hold=False)
+            st = await last(); check('no hold keeps freehand shape', on_box(st) > 1, f'off-edge {on_box(st):.2f}')
+            await page.click('[data-tool="hl"]')
+            await hold_draw('pen', 7, [[ox + 4 * i, oy + 330 + 2 * math.sin(i / 2)] for i in range(50)])
+            st = await last(); check('highlighter line snaps straight', st['t'] == 'hl' and line_dev(st) < 0.6)
+            await page.click('#tb-opts [data-act="shapes"]'); await page.wait_for_timeout(100)
+            await hold_draw('pen', 7, [[x, y + 260] for x, y in boxpts])
+            st = await last(); check('shapes off: hold leaves ink as drawn', not await J(page, '__margin.SET.shapes') and on_box(st) > 1)
+            await page.click('#tb-opts [data-act="shapes"]'); await J(page, "__margin.setTool('pen')")
+            await page.screenshot(path=str(SHOTS / 'shapes.png'))
+
             # ---------- touch gestures ----------
             await page.evaluate("document.getElementById('scroller').scrollTop = 0"); await page.wait_for_timeout(100)
             await ev(page, 'pointerdown', 31, 'touch', 600, 700)

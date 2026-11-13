@@ -124,6 +124,9 @@ button{background:none;border:0;cursor:pointer;touch-action:manipulation;padding
 .seg{display:flex;background:#efeee9;border-radius:9px;padding:2px}
 .seg button{height:30px;padding:0 10px;border-radius:7px;font-size:13px;font-weight:500;color:#48484a;white-space:nowrap}
 .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.shp{margin:0 4px;height:32px;padding:0 10px;border-radius:9px;font-size:13px;font-weight:500;color:var(--muted);border:1px solid var(--line);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.shp .ic{width:16px;height:16px}
+.shp.on{color:var(--accent);border-color:var(--accent);background:rgba(45,91,227,.07)}
 .hint{font-size:13px;color:var(--muted);white-space:nowrap;padding:0 4px}
 
 #scroller{flex:1;overflow:auto;position:relative;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:contain}
@@ -344,7 +347,7 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical;line-height:1.4;font:
    Margin — a local-first handwritten notes app
    ===================================================================== */
 
-const APP_VERSION = '10 · feedback tips';
+const APP_VERSION = '11 · hold to snap shapes';
 // Google Apps Script web-app URL that receives feedback (see feedback/SETUP.md). Empty = feedback not set up yet.
 const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec';
 const PAGE_W = 816, PAGE_H = 1056;          // page units (Letter @ 96dpi)
@@ -389,6 +392,7 @@ const ICON = {
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   fit: '<path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4"/>',
   finger: '<path d="M9 11.5V5.5a1.5 1.5 0 0 1 3 0V11m0-1.5a1.5 1.5 0 0 1 3 0V11m0-.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-.6a6 6 0 0 1-4.6-2.2L4.4 16a1.6 1.6 0 0 1 2.4-2.1L9 15.5"/>',
+  shapes: '<path d="M4 4h8v8H4z"/><circle cx="16" cy="16" r="4.5"/>',
   sliders: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/>',
   dup: '<rect x="4" y="4" width="11" height="14" rx="2"/><path d="M9 21h8a2 2 0 0 0 2-2V8"/>',
   download: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/>',
@@ -426,7 +430,7 @@ const SIZE_RANGE = { pen: [0.5, 14, 0.1], hl: [4, 60, 1], eraser: [4, 120, 1], t
 
 /* ---------- settings ---------- */
 const DEFAULTS = {
-  fingerDraw: false, template: 'lined', paper: 'white', spacing: { lined: 32, grid: 24, dotted: 24 }, ink: 'normal', sort: 'updated', tool: 'pen',
+  fingerDraw: false, template: 'lined', paper: 'white', spacing: { lined: 32, grid: 24, dotted: 24 }, ink: 'normal', sort: 'updated', tool: 'pen', shapes: true,
   pen: { color: '#1c1c1e', size: 2.2, kind: 'fountain', custom: '#8a5a2b' },
   hl: { color: '#ffe14d', size: 18, custom: '#ffc8a0' },
   eraser: { size: 26, mode: 'partial' },
@@ -1404,11 +1408,12 @@ function renderToolbar() {
     }).join('') + `<button class="szval" data-act="size" data-popanchor title="Exact size">${icon('sliders')}${fmtSize(cfg.size)}</button>`;
   }
   let o = '';
-  if (t === 'pen') o = `<div class="seg"><button data-kind="fountain" class="${cfg.kind !== 'ball' ? 'on' : ''}">Fountain</button><button data-kind="ball" class="${cfg.kind === 'ball' ? 'on' : ''}">Ballpoint</button></div>`;
+  const shp = `<button class="shp ${SET.shapes ? 'on' : ''}" data-act="shapes" aria-pressed="${SET.shapes ? 'true' : 'false'}" title="Draw a line, rectangle or ellipse and hold still at the end to straighten it">${icon('shapes')}Hold to snap shapes</button>`;
+  if (t === 'pen') o = `<div class="seg"><button data-kind="fountain" class="${cfg.kind !== 'ball' ? 'on' : ''}">Fountain</button><button data-kind="ball" class="${cfg.kind === 'ball' ? 'on' : ''}">Ballpoint</button></div>${shp}`;
   else if (t === 'eraser') o = `<div class="seg"><button data-emode="partial" class="${cfg.mode !== 'stroke' ? 'on' : ''}">Precise</button><button data-emode="stroke" class="${cfg.mode === 'stroke' ? 'on' : ''}">Whole stroke</button></div>`;
   else if (t === 'lasso') o = `<span class="hint">Circle or tap to select · drag to move · tap empty space to paste</span>`;
   else if (t === 'text') o = `<span class="hint">Tap the page to type</span>`;
-  else if (t === 'hl') o = `<span class="hint">Highlights sit under your ink</span>`;
+  else if (t === 'hl') o = `${shp}<span class="hint">Highlights sit under your ink</span>`;
   $('#tb-opts').innerHTML = o;
 }
 const fmtSize = s => (s < 10 ? (Math.round(s * 10) / 10).toFixed(1) : Math.round(s)) + '';
@@ -1456,6 +1461,7 @@ function bindToolbar() {
     }
     if (b.dataset.size) { cfg.size = parseFloat(b.dataset.size); saveSettings(); renderToolbar(); if (E.tool === 'text') applyToActiveText(); return; }
     if (b.dataset.act === 'size') { sizePopover(b); return; }
+    if (b.dataset.act === 'shapes') { SET.shapes = !SET.shapes; saveSettings(); renderToolbar(); toast(SET.shapes ? 'Shapes on — draw, then hold still to straighten' : 'Shape snapping off'); return; }
     if (b.dataset.kind) { cfg.kind = b.dataset.kind; saveSettings(); renderToolbar(); return; }
     if (b.dataset.emode) { cfg.mode = b.dataset.emode; saveSettings(); renderToolbar(); }
   });
@@ -1543,7 +1549,7 @@ async function insertFile() {
 /* =====================================================================
    INPUT: drawing, erasing, lasso, text — plus touch scroll/zoom
    ===================================================================== */
-const D = { active: false, pid: null, type: null, v: null, rect: null, mode: null, st: null, segDone: 0, ps: 0.5, t0: 0, before: null, raf: 0, lctx: null, moved: 0 };
+const D = { active: false, pid: null, type: null, v: null, rect: null, mode: null, st: null, segDone: 0, ps: 0.5, t0: 0, before: null, raf: 0, lctx: null, moved: 0, shape: null, holdT: 0 };
 const G = { touches: new Map(), mode: null, start: null, samples: [], tap: null, pinch: null, mom: 0 };
 
 function attachLive(v) {
@@ -1604,7 +1610,10 @@ function onPointerMove(e) {
   D.moved = Math.max(D.moved, Math.hypot(e.clientX - D.sx0, e.clientY - D.sy0));
   const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
   const list = evs.length ? evs : [e];
-  if (D.mode === 'ink') { for (const ev of list) addInkPoint(ev); drawLiveInk(); }
+  if (D.mode === 'ink') {
+    if (D.shape) { if (D.shape.kind === 'line') moveSnappedLine(list[list.length - 1]); }
+    else { for (const ev of list) addInkPoint(ev); drawLiveInk(); holdMove(e); }
+  }
   else if (D.mode === 'erase') { for (const ev of list) { const { x, y } = toPage(ev); eraseSeg(D.ex, D.ey, x, y); D.ex = x; D.ey = y; } queueEraseFrame(); }
   else if (D.mode === 'lasso') { const { x, y } = toPage(e); D.lp.push(x, y); queueLassoFrame(); }
   else if (D.mode === 'move') { const { x, y } = toPage(e); E.sel.dx = x - D.mx; E.sel.dy = y - D.my; queueMoveFrame(); }
@@ -1622,10 +1631,11 @@ function beginInk(e, x, y) {
   D.mode = 'ink'; D.before = snap(D.v.page);
   const pr = pressureOf(e); D.ps = pr;
   D.st = { id: uid(), t: E.tool === 'hl' ? 'hl' : (cfg.kind === 'ball' ? 'ball' : 'pen'), c: cfg.color, s: cfg.size, p: [x, y, pr] };
-  D.segDone = 0;
+  D.segDone = 0; D.shape = null;
   D.lctx = attachLive(D.v);
   if (D.st.t === 'hl') live.style.mixBlendMode = 'multiply';
   drawLiveInk();
+  armHold(e);
 }
 function addInkPoint(ev, final) {
   const { x: rx, y: ry } = toPage(ev);
@@ -1649,6 +1659,113 @@ function drawLiveInk() {
   if (n === 1) { ctx.beginPath(); ctx.arc(P[0], P[1], segW(st, P, 0) / 2, 0, 6.2832); ctx.fill(); }
   else { if (n - 2 >= D.segDone + 1) { drawSegs(ctx, st, P, D.segDone + 1, n - 2, 0, 0); D.segDone = n - 2; } drawTail(ctx, st, P, n, 0, 0); }
   ctx.restore();
+}
+/* shape snap: draw a line, rectangle or ellipse, keep the pen still at the end, and it straightens */
+const HOLD_MS = 500, HOLD_SLOP = 6;           // ms still, screen px of allowed wobble
+function armHold(e) { disarmHold(); if (!SET.shapes) return; D.hx = e.clientX; D.hy = e.clientY; D.holdT = setTimeout(onHold, HOLD_MS); }
+function disarmHold() { if (D.holdT) { clearTimeout(D.holdT); D.holdT = 0; } }
+function holdMove(e) { if (SET.shapes && Math.hypot(e.clientX - D.hx, e.clientY - D.hy) > HOLD_SLOP) armHold(e); }
+function onHold() {
+  D.holdT = 0;
+  if (!D.active || D.mode !== 'ink' || D.shape || !SET.shapes) return;
+  const sh = recognizeShape(D.st.p); if (!sh) return;
+  D.shape = sh; D.st.p = sh.p; redrawLiveInk();
+}
+function redrawLiveInk() {
+  if (D.raf) { cancelAnimationFrame(D.raf); D.raf = 0; }
+  const ctx = D.lctx; ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, live.width, live.height); ctx.restore();
+  drawStroke(ctx, D.st);
+}
+function moveSnappedLine(ev) {
+  const { x, y } = toPage(ev), sh = D.shape;
+  const end = snapAngle(sh.ax, sh.ay, x, y);
+  sh.p = shapeLine(sh.ax, sh.ay, end[0], end[1], sh.pr); D.st.p = sh.p; redrawLiveInk();
+}
+function snapAngle(ax, ay, bx, by) {  // within 3° of horizontal / vertical -> exactly level
+  const dx = bx - ax, dy = by - ay, t = Math.tan(3 * Math.PI / 180);
+  if (Math.abs(dy) <= Math.abs(dx) * t) return [bx, ay];
+  if (Math.abs(dx) <= Math.abs(dy) * t) return [ax, by];
+  return [bx, by];
+}
+function shapeLine(ax, ay, bx, by, pr) {
+  const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 4)), out = [];
+  for (let i = 0; i <= n; i++) out.push(ax + (bx - ax) * i / n, ay + (by - ay) * i / n, pr);
+  return out;
+}
+function shapeRect(x0, y0, x1, y1, pr) {
+  const C = [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]], out = [];
+  for (let k = 0; k < 4; k++) {
+    const [ax, ay] = C[k], [bx, by] = C[k + 1], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 4));
+    out.push(ax, ay, pr);                     // corner twice -> crisp corner
+    for (let i = 0; i < n; i++) out.push(ax + (bx - ax) * i / n, ay + (by - ay) * i / n, pr);
+  }
+  out.push(x0, y0, pr, x0, y0, pr);
+  return out;
+}
+function shapeEllipse(cx, cy, rx, ry, a0, pr) {
+  const per = Math.PI * (3 * (rx + ry) - Math.sqrt((3 * rx + ry) * (rx + 3 * ry)));
+  const n = clamp(Math.round(per / 4), 24, 360), out = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + i / n * Math.PI * 2; out.push(cx + rx * Math.cos(a), cy + ry * Math.sin(a), pr); }
+  return out;
+}
+// Returns {kind:'line'|'rect'|'ellipse', p:[x,y,pr,...], ...} or null when the stroke isn't a clear shape.
+function recognizeShape(P) {
+  const n = P.length / 3; if (n < 3) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, len = 0, psum = 0;
+  for (let i = 0; i < n; i++) {
+    const x = P[i * 3], y = P[i * 3 + 1]; psum += P[i * 3 + 2];
+    if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    if (i) len += Math.hypot(x - P[i * 3 - 3], y - P[i * 3 - 2]);
+  }
+  const w = x1 - x0, h = y1 - y0, size = Math.max(w, h), pr = Math.round(psum / n * 1000) / 1000;
+  if (len < 24 || size < 16) return null;
+  const ax = P[0], ay = P[1], bx = P[(n - 1) * 3], by = P[(n - 1) * 3 + 1], chord = Math.hypot(bx - ax, by - ay);
+  // straight line: every point close to the start→end chord
+  if (chord >= 20 && len < chord * 2) {
+    let dev = 0;
+    for (let i = 0; i < n; i++) dev = Math.max(dev, distPtSeg(P[i * 3], P[i * 3 + 1], ax, ay, bx, by));
+    if (dev <= Math.max(5, chord * 0.07)) { const e = snapAngle(ax, ay, bx, by); return { kind: 'line', ax, ay, pr, p: shapeLine(ax, ay, e[0], e[1], pr) }; }
+    return null;
+  }
+  // closed shapes: ends meet, the shape has real width and height, and it goes all the way round
+  let close = chord;                                              // overshooting the start still counts as closed
+  for (let i = Math.floor(n * 0.6); i < n; i++) close = Math.min(close, Math.hypot(P[i * 3] - ax, P[i * 3 + 1] - ay));
+  if (close > size * 0.25 || Math.min(w, h) < 12 || Math.min(w, h) < size * 0.12 || len < size * 2) return null;
+  // try every tilt (shapes repeat every 90°) and keep the best rectangle and the best ellipse
+  const deg = Math.PI / 180; let bestR = null, bestE = null;
+  for (let a = -45; a < 45; a++) {
+    const f = fitClosed(P, n, a * deg);
+    if (!bestR || f.eR < bestR.eR) bestR = f;
+    if (!bestE || f.eE < bestE.eE) bestE = f;
+  }
+  let kind = bestR.eR < bestE.eE ? 'rect' : 'ellipse', f = kind === 'rect' ? bestR : bestE;
+  if (Math.abs(f.th) <= 5 * deg || (kind === 'ellipse' && Math.abs(f.w - f.h) <= Math.max(f.w, f.h) * 0.12)) f = fitClosed(P, n, 0);   // nearly level -> level
+  const err = kind === 'rect' ? f.eR : f.eE;
+  if (f.oct !== 255 || err > Math.min(f.w, f.h) * 0.075 + 1.5) return null;
+  let W = f.w, H = f.h;
+  if (Math.abs(W - H) <= Math.max(W, H) * 0.12) W = H = (W + H) / 2;   // nearly square / round -> exactly
+  const loc = kind === 'rect' ? shapeRect(-W / 2, -H / 2, W / 2, H / 2, pr) : shapeEllipse(0, 0, W / 2, H / 2, f.a0, pr);
+  const c = Math.cos(f.th), sn = Math.sin(f.th);
+  for (let i = 0; i < loc.length; i += 3) { const x = loc[i], y = loc[i + 1]; loc[i] = f.cx + x * c - y * sn; loc[i + 1] = f.cy + x * sn + y * c; }
+  return { kind, pr, p: loc };
+}
+// Fit a box/ellipse to the points in a frame tilted by th; mean distance of the points from each outline.
+function fitClosed(P, n, th) {
+  const c = Math.cos(th), sn = Math.sin(th), X = new Float64Array(n), Y = new Float64Array(n);
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const x = P[i * 3], y = P[i * 3 + 1], u = x * c + y * sn, v = -x * sn + y * c; X[i] = u; Y[i] = v;
+    if (u < x0) x0 = u; if (u > x1) x1 = u; if (v < y0) y0 = v; if (v > y1) y1 = v;
+  }
+  const lx = (x0 + x1) / 2, ly = (y0 + y1) / 2, rx = Math.max(1, (x1 - x0) / 2), ry = Math.max(1, (y1 - y0) / 2);
+  let oct = 0, eE = 0, eR = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = X[i] - lx, dy = Y[i] - ly, d = Math.hypot(dx, dy), r = Math.hypot(dx / rx, dy / ry);
+    oct |= 1 << (Math.floor((Math.atan2(dy / ry, dx / rx) + Math.PI) / (Math.PI / 4)) & 7);
+    eE += r ? Math.abs(1 - 1 / r) * d : Math.min(rx, ry);
+    eR += Math.min(dx + rx, rx - dx, dy + ry, ry - dy);
+  }
+  return { th, eE: eE / n, eR: eR / n, oct, w: rx * 2, h: ry * 2, cx: lx * c - ly * sn, cy: lx * sn + ly * c, a0: Math.atan2((Y[0] - ly) / ry, (X[0] - lx) / rx) };
 }
 function strokeBB(st) {
   const P = st.p; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -2250,10 +2367,11 @@ function cancelDraw() {
 function endDraw(e, cancelled) {
   if (!D.active) return;
   if (D.raf) { cancelAnimationFrame(D.raf); D.raf = 0; }
+  disarmHold();
   try { sc().releasePointerCapture(D.pid); } catch (err) {}
   const v = D.v;
   switch (D.mode) {
-    case 'ink': if (e && !cancelled) addInkPoint(e, true); commitInk(); break;
+    case 'ink': disarmHold(); if (e && !cancelled && !D.shape) addInkPoint(e, true); commitInk(); D.shape = null; break;
     case 'erase': clearLive(); if (D.needRender) { D.needRender = false; renderPage(v); } if (D.changed) pushUndo({ k: 'page', id: v.page.id, before: D.before, after: snap(v.page) }); break;
     case 'lasso': finishLasso(); break;
     case 'move': case 'resize': finishMove(); break;
@@ -2512,7 +2630,7 @@ async function boot() {
     });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {}); });
   }
-  window.__margin = { E, L, DB, SET, openNote, closeNote, setTool, exportPdf, buildPdf, fileToPages, ingestFiles };
+  window.__margin = { E, L, DB, SET, recognizeShape, openNote, closeNote, setTool, exportPdf, buildPdf, fileToPages, ingestFiles };
 }
 boot();
 })();
