@@ -1,0 +1,10 @@
+/* selection handles, crop, paste */
+.sel-handle,.crop-handle{position:absolute;z-index:6;width:36px;height:36px;margin:-18px 0 0 -18px;display:flex;align-items:center;justify-content:center;touch-action:none}
+.sel-handle::after{content:"";width:14px;height:14px;border-radius:50%;background:#fff;border:2px solid var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.crop-handle::after{content:"";width:18px;height:18px;background:#fff;border:2px solid #1f1f21;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.35)}
+.h-tl,.h-br{cursor:nwse-resize}.h-tr,.h-bl{cursor:nesw-resize}
+.sel-bar .accent{background:var(--accent)}
+.sel-bar.crop-bar{transform:translate(-50%,-100%)}
+.sel-bar.crop-bar.below{transform:translate(-50%,0)}
+.sel-bar.paste-bar{transform:translate(-50%,-100%)}
+.sel-bar button{touch-action:manipulation}

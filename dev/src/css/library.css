@@ -1,0 +1,47 @@
+/* ---------- library ---------- */
+#library{background:var(--bg)}
+.lib-head{display:flex;align-items:center;gap:10px;padding:calc(var(--sat) + 14px) calc(var(--sar) + 20px) 10px calc(var(--sal) + 20px)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:21px;letter-spacing:-.02em;margin-right:auto}
+.brand-mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(150deg,#3a67ee,#1f3fa6);position:relative;box-shadow:inset 0 -1px 0 rgba(0,0,0,.15)}
+.brand-mark svg{position:absolute;inset:5px;width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.search{display:flex;align-items:center;gap:6px;height:36px;padding:0 10px;border-radius:10px;background:var(--panel);border:1px solid var(--line);width:min(300px,34vw);color:var(--muted)}
+.search .ic{width:17px;height:17px}
+.search input{border:0;outline:0;background:transparent;flex:1;min-width:0;font-size:14px;color:var(--ink)}
+.lib-bar{display:flex;align-items:center;gap:12px;padding:4px calc(var(--sar) + 20px) 12px calc(var(--sal) + 20px);flex-wrap:wrap}
+#crumbs{display:flex;align-items:center;gap:2px;flex:1;min-width:0;font-size:22px;font-weight:650;letter-spacing:-.015em;overflow:hidden}
+#crumbs button{padding:2px 6px;border-radius:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40vw}
+#crumbs button.up{color:var(--muted);font-weight:500;font-size:17px}
+#crumbs button:active{background:#ebe9e3}
+#crumbs .chev{color:var(--faint);font-weight:400;font-size:18px}
+.lib-actions{display:flex;gap:8px}
+#grid{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px calc(var(--sar) + 20px) calc(var(--sab) + 40px) calc(var(--sal) + 20px)}
+.sec-h{font-size:12.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:14px 2px 10px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:18px}
+.tiles.folders{grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.tile{position:relative;cursor:pointer;-webkit-user-select:none;user-select:none}
+.tile.folder{display:flex;align-items:center;gap:12px;padding:12px 40px 12px 12px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+.tile.folder:active{background:#f3f2ee}
+.ficon{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none}
+.ficon .ic{width:22px;height:22px;stroke-width:1.9}
+.tmeta{min-width:0}
+.tname{font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tsub{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile.note .thumb{aspect-ratio:8.5/11;border-radius:10px;overflow:hidden;background:#fff;border:1px solid var(--line);
+  box-shadow:0 1px 2px rgba(0,0,0,.04),0 6px 16px -8px rgba(0,0,0,.12);transition:transform .12s}
+.tile.note:active .thumb{transform:scale(.98)}
+.tile.note .thumb img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.tile.note .tmeta{padding:9px 30px 0 2px}
+.tile .more{position:absolute;right:6px;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.tile.folder .more{top:50%;transform:translateY(-50%)}
+.tile.note .more{bottom:2px;right:-2px}
+.tile .more:active{background:#ebe9e3}
+.empty{margin:70px auto;text-align:center;color:var(--muted);max-width:340px}
+.empty .big{font-size:18px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.empty .btn{margin-top:16px}
+
+/* paper previews */
+.pv{background:#fff}
+.pv-lined{background:#fff repeating-linear-gradient(180deg,transparent 0 9px,rgba(70,120,190,.32) 9px 10px) 0 14px/100% 100% no-repeat}
+.pv-grid{background-color:#fff;background-image:linear-gradient(rgba(60,90,130,.18) 1px,transparent 1px),linear-gradient(90deg,rgba(60,90,130,.18) 1px,transparent 1px);background-size:8px 8px}
+.pv-dotted{background-color:#fff;background-image:radial-gradient(circle,rgba(60,70,90,.45) .9px,transparent 1.2px);background-size:8px 8px}
+.pv-blank{background:#fff}

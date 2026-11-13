@@ -1,0 +1,17 @@
+/* destination picker */
+.dest-new{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line2);text-align:left}
+.dest-new .ic{width:24px;height:24px;color:var(--accent)}
+.dest-new b,.dest-row b{display:block;font-size:14.5px;font-weight:600}
+.dest-new small,.dest-row small{display:block;font-size:12.5px;color:var(--muted)}
+.dest-new:active,.dest-row:active,.dest-row:hover{background:#f3f2ee}
+.dest-q{margin-bottom:8px}
+.dest-list{display:flex;flex-direction:column;gap:2px;max-height:42vh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:4px}
+.dest-row{display:flex;align-items:center;gap:11px;padding:6px 8px;border-radius:9px;text-align:left;width:100%}
+.dest-row img,.dest-row .pv{width:34px;height:44px;border-radius:4px;border:1px solid var(--line);object-fit:cover;object-position:top;flex:none}
+.dest-row .dm{min-width:0;flex:1}
+.dest-row b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dest-add{font-size:13px;font-weight:600;color:var(--accent);padding:0 6px}
+/* drag & drop */
+#drop-ov{position:fixed;inset:10px;z-index:70;border:2.5px dashed var(--accent);border-radius:20px;background:rgba(45,91,227,.07);display:flex;align-items:flex-end;justify-content:center;padding-bottom:44px;pointer-events:none}
+#drop-ov span{background:var(--accent);color:#fff;padding:10px 18px;border-radius:12px;font-weight:600;font-size:14px;box-shadow:0 8px 24px rgba(45,91,227,.35)}
+.tile.note.drop-hover .thumb{box-shadow:0 0 0 3px var(--accent);transform:scale(1.02)}

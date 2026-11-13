@@ -5,27 +5,49 @@ Margin is a local-first handwritten notes web app. GitHub Pages serves it from t
 ## Layout
 | Path | What it is |
 |---|---|
-| `dev/src/app.js` | All app logic (one IIFE). **Edit this**, not `index.html`. |
-| `dev/src/app.css` | All styles. |
+| `dev/src/js/` | **All app logic, as ES modules** (see the module map below). Edit these. |
+| `dev/src/css/` | Styles split by area. `main.css` `@import`s them in order, and later files override earlier ones. |
 | `dev/src/shell.html` | Page skeleton; `/*CSS*/` and `/*JS*/` are replaced at build time. |
-| `dev/build.py` | Builds `index.html` from the three files above. |
+| `dev/build.py` | Bundles CSS and JS with esbuild (installed automatically into `dev/node_modules` on first run) and writes `index.html`. |
 | `dev/tests/smoke.py` | End-to-end Playwright tests (Pencil, finger and mouse input simulated). |
 | `index.html` | **Built output** that Pages serves. Never hand-edit it, always rebuild. |
 | `sw.js` | Service worker (offline + update handling + share target). |
 | `lib/` | pdf.js (vendored, don't modify). |
 | `feedback/` | Google Apps Script backend for the in-app feedback button (deployed separately by the owner). |
 
-## Build, test, release
-```bash
-python3 dev/build.py            # writes index.html
-python3 dev/tests/smoke.py      # must print "N/N passed" and exit 0
-```
-Every release that changes app files must:
-1. Bump `APP_VERSION` at the top of `dev/src/app.js`, e.g. `'5 · <short summary>'`. The number must go up by one.
-2. Bump `VERSION` in `sw.js` to match, e.g. `margin-v5`.
-3. Rebuild, run the smoke tests, and push to `main` only if they pass. Pages deploys in about a minute.
+### Module map (`dev/src/js/`)
+| Module | Responsibility |
+|---|---|
+| `main.js` | Entry point: opens storage, wires everything up, service-worker updates. |
+| `core/version.js` | `APP_VERSION` (bump every release) and `FEEDBACK_URL`. |
+| `core/util.js` | `$`, `$$`, `clamp`, `esc`, `uid`, page size and other small constants. |
+| `core/icons.js` | Inline SVG icons (`icon(name)`). |
+| `core/config.js` | Templates, paper colours, palettes, sizes, spacing, and user settings `SET` (localStorage). |
+| `core/storage.js` | IndexedDB wrapper `DB` and cached image/background loading (`loadBg`). |
+| `ui/dialogs.js` | Toasts, popovers, menus, modals, file pickers, paper picker. |
+| `library/library.js` | Library screen: folders, notes grid, search, sort, note/folder menus, create/duplicate/delete. |
+| `library/import.js` | Getting files in: new-or-existing picker, drag & drop, paste, share target, PDF/image → pages. |
+| `editor/editor.js` | Editor state `E`, undo/redo, saving, page views, zoom/scroll, open/close note. |
+| `editor/render.js` | Drawing paper templates, strokes, text and whole pages to canvas. |
+| `editor/toolbar.js` | Tool bar (tools, colours, sizes, options), ⋯ menu, page add/duplicate/delete/style. |
+| `editor/text.js` | Typed text boxes. |
+| `editor/bindings.js` | Wires editor buttons, pointer/touch listeners and keyboard shortcuts. |
+| `editor/export-pdf.js` | Minimal PDF writer and "Export as PDF". |
+| `input/pointer.js` | Pointer routing (Pencil / finger / mouse), drawing state `D`, gesture state `G`, live canvas, start/end/cancel of every drag. |
+| `input/ink.js` | Pen and highlighter strokes: capture, smoothing, live drawing, commit. |
+| `input/shapes.js` | Hold-to-snap shapes and scribble-to-erase. |
+| `input/eraser.js` | Precise and whole-stroke eraser. |
+| `input/gestures.js` | Touch pan/pinch with momentum, taps, palm rejection. |
+| `selection/selection.js` | Lasso, selection bar, move/resize handles, selection actions. |
+| `selection/clipboard.js` | Copy / cut / paste across pages and notes. |
+| `selection/images.js` | Images on pages: insert, draw, crop. |
+| `feedback/feedback.js` | In-app feedback form. |
+| `settings/settings.js` | Settings dialog, backup export / restore. |
 
-Add a smoke-test check for every feature you add or bug you fix (in `dev/tests/smoke.py`, same style).
+Conventions:
+- Put new code in the module that owns that area, or add a new module, and import what you need. Every top-level name is `export`ed.
+- Never assign to a binding imported from another module. If a module's state needs changing from outside, change a property on its state object (e.g. `E.tool = ...`) or call a function that module exports.
+- A missing import shows up as "X is not defined" in the smoke tests' page errors.
 
 ## Data model (IndexedDB `margin-notes`, stores: folders, notes, pages, blobs)
 - `notes`: `{id, title, folderId, created, updated, template, paper, spacing, ink, blobs[], thumb}`
