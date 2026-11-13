@@ -202,6 +202,7 @@ async def main():
             if await J(page, "!!document.getElementById('btn-feedback')"):
                 await page.click('#btn-feedback'); await page.wait_for_timeout(200)
                 configured = await J(page, "!!document.querySelector('.modal .fb-form')")
+                if configured: check('feedback form shows one-idea tip', await J(page, "!!document.querySelector('.modal .fb-tip')"))
                 check('feedback dialog opens', configured or await J(page, "(document.querySelector('.modal h3')||{}).textContent==='Feedback isn’t set up yet'"))
                 if configured:
                     await page.fill('.fb-title', 'Bug title'); await page.fill('.fb-desc', 'Bug details')

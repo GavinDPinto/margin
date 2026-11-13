@@ -258,5 +258,6 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical;line-height:1.4;font:
 .fb-add-row .fb-check{margin-top:0}
 .fb-check input{width:18px;height:18px;accent-color:var(--accent)}
 .fb-note{margin-top:12px}
+.fb-tip{margin:12px 0 0;background:#f6f5f1;border-radius:10px;padding:9px 12px}
 .mbody .fb-err{color:var(--danger);font-weight:500;font-size:13.5px;margin:8px 0 0}
 .mbtns .btn:disabled{opacity:.6}
