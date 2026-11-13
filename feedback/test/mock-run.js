@@ -8,6 +8,7 @@ const blob = (bytes, type, name) => ({ bytes, type, name, getBytes: () => bytes,
 const range = (r, c, nr = 1, nc = 1) => ({
   setValues(v) { v.forEach((row, i) => row.forEach((x, j) => { (sheetRows[r - 1 + i] ||= [])[c - 1 + j] = x; })); return this; },
   setFontWeight() { return this; }, setValue(x) { (sheetRows[r - 1] ||= [])[c - 1] = x; return this; },
+  getValue() { return (sheetRows[r - 1] || [])[c - 1] ?? ''; },
   getValues() { return Array.from({ length: nr }, (_, i) => Array.from({ length: nc }, (_, j) => (sheetRows[r - 1 + i] || [])[c - 1 + j] ?? '')); },
 });
 const sheet = { setName() {}, getRange: range, setFrozenRows() {}, setColumnWidth() {}, getLastRow: () => sheetRows.length, appendRow(v) { sheetRows.push(v.slice()); } };
@@ -97,8 +98,26 @@ assert(ping3.notified === 1, 'ping emails the reporter as soon as it ships');
 assert(mails.length === 2 && mails[1].to === 'kid@example.com' && /version 6/.test(mails[1].htmlBody), 'reporter emailed once shipped (with version + steps)');
 ctx.checkShipped(); assert(mails.length === 2, 'reporter emailed only once');
 
+// reject with a reason → polite email to a reporter who opted in
+post({ id: 'rej-2', kind: 'feature', title: 'Sync with friends', description: 'collab', email: 'pal@example.com', notify: true });
+const u3 = new URL(/href="([^"]+)&do=approve"/.exec(mails[mails.length - 1].htmlBody)[1]).searchParams;
+const page = ctx.doGet({ parameter: { a: 'review', id: u3.get('id'), sig: u3.get('sig'), do: 'reject' } }).html;
+assert(/Reject with a reason/.test(page) && /Email preview/.test(page) && /Thank you so much/.test(page), 'reject page shows reason box + email preview');
+if (process.env.DUMP_REVIEW) fs.writeFileSync(process.env.DUMP_REVIEW, page.replace('<script>', '<script>window.google={script:{run:{withSuccessHandler(){return this},withFailureHandler(){return this},decide(){}}}};'));
+const scriptJs = /<script>([\s\S]*?)<\/script>/.exec(page)[1];
+try { new Function(scriptJs); assert(true, 'review page script is valid JS'); } catch (e) { assert(false, 'review page script is valid JS: ' + e.message); }
+const before = mails.length;
+const rr = ctx.decide(u3.get('id'), u3.get('sig'), 'reject', 'Thanks! Notes stay <on your device>, so syncing isn\'t possible yet.', true);
+const rm = mails[mails.length - 1];
+assert(rr.ok && rr.emailed && mails.length === before + 1 && rm.to === 'pal@example.com', 'reject emails the reporter');
+assert(/Thank you so much/.test(rm.htmlBody) && /decided not to add this/.test(rm.htmlBody) && /&lt;on your device&gt;/.test(rm.htmlBody) && /About your Margin idea/.test(rm.subject), 'rejection email is polite and includes the (escaped) note');
+const rrow = sheetRows.find(r => r[0] === u3.get('id'));
+assert(rrow[2] === 'rejected' && /syncing/.test(rrow[15]) && rrow[13], 'sheet stores status, owner note, notified time');
+assert(ctx.decide(u3.get('id'), u3.get('sig'), 'reject', 'again', true).ok === false && mails.length === before + 1, 'no second rejection email');
 post({ id: 'rej-1', kind: 'bug', title: 'meh', description: 'x', email: '', notify: true });
-const u2 = new URL(/href="([^"]+)&do=approve"/.exec(mails[2].htmlBody)[1]).searchParams;
-assert(ctx.decide(u2.get('id'), u2.get('sig'), 'reject').ok && sheetRows[2][2] === 'rejected', 'reject works');
-assert(sheetRows[2][8] === 'no', 'notify ignored without email');
+const u2 = new URL(/href="([^"]+)&do=approve"/.exec(mails.find(m => /meh/.test(m.subject)).htmlBody)[1]).searchParams;
+const nm = mails.length;
+const rj = ctx.decide(u2.get('id'), u2.get('sig'), 'reject', 'not now', true);
+assert(rj.ok && !rj.emailed && mails.length === nm && sheetRows.find(r => r[0] === 'rej-1')[2] === 'rejected', 'reject without opted-in email sends nothing');
+assert(sheetRows.find(r => r[0] === 'rej-1')[8] === 'no', 'notify ignored without email');
 console.log(process.exitCode ? '\nSOME CHECKS FAILED' : '\nAll checks passed');

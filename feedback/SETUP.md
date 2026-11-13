@@ -31,7 +31,8 @@ The feedback service is a free Google Apps Script that runs under your Google ac
 4. Send that URL to Claude. Claude adds it to the app as `FEEDBACK_URL`, and the Feedback button goes live.
 
 ## Day to day
-- Each report arrives in Gmail as **[Margin] 🐞 Bug report / 💡 Feature idea**. Tap **Approve →**, then **Approve & create GitHub issue** on the page that opens. **Reject** files it away.
+- Each report arrives in Gmail as **[Margin] 🐞 Bug report / 💡 Feature idea**. Tap **Approve →**, then **Approve & create GitHub issue** on the page that opens.
+- To turn one down, tap **Reject**, type your reason, and check the email preview, then tap **Reject & send**. If the reporter asked for updates, they get a polite email that includes your note. Either way, the reason is saved in your Sheet.
 - Within an hour Claude builds the change, ships it, closes the issue and emails you. If the reporter asked, they get an email with how to see it.
 - Everything is logged in the private Sheet: reports, decisions, issue numbers and who was notified.
 

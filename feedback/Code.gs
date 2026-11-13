@@ -27,7 +27,7 @@ const CONFIG = {
 };
 
 const COLS = ['ID', 'Received', 'Status', 'Type', 'Title', 'Description', 'Attachments', 'Reporter email', 'Wants email',
-  'App version', 'Device', 'Issue #', 'Issue URL', 'Reporter notified', 'Decided'];
+  'App version', 'Device', 'Issue #', 'Issue URL', 'Reporter notified', 'Decided', 'Owner note'];
 const C = Object.fromEntries(COLS.map((name, i) => [name, i + 1]));
 
 /* ------------------------------------------------------------------ setup */
@@ -160,22 +160,49 @@ function doGet(e) {
   }
   // The decision needs a tap on this page (email link scanners can't approve by just opening the link).
   const want = p.do === 'reject' ? 'reject' : 'approve';
+  const kind = v[C['Type'] - 1], title = v[C['Title'] - 1];
+  const canEmail = v[C['Wants email'] - 1] === 'yes' && !!v[C['Reporter email'] - 1];
   const body = head + `
-    <div class="b">
-      <button id="ok" class="${want === 'approve' ? 'pri' : ''}" onclick="go('approve')">Approve &amp; create GitHub issue</button>
-      <button id="no" class="${want === 'reject' ? 'pri red' : ''}" onclick="go('reject')">Reject</button>
-    </div><p id="msg" class="s"></p>
+    <div class="b"${want === 'reject' ? ' style="display:none"' : ''} id="appr">
+      <button class="pri" onclick="go('approve')">Approve &amp; create GitHub issue</button>
+      <button onclick="showReject()">Reject…</button>
+    </div>
+    <div id="rej" class="rej"${want === 'reject' ? '' : ' style="display:none"'}>
+      <h2>Reject with a reason</h2>
+      <label for="note">Your reason ${canEmail ? '(included in a polite email to the reporter)' : '(saved in your Sheet)'}</label>
+      <textarea id="note" rows="4" maxlength="2000" placeholder="e.g. Thanks! Margin keeps notes on your device, so syncing with friends isn't something I can add right now." oninput="prev()"></textarea>
+      ${canEmail
+        ? `<label class="chk"><input type="checkbox" id="mail" checked onchange="prev()"> Email the reporter (they asked for updates)</label>
+           <p class="k" style="margin-top:14px">Email preview</p><div id="pv" class="pv"></div>`
+        : `<p class="s">The reporter didn't leave an email or ask for updates, so they won't be emailed.</p>`}
+      <div class="b"><button class="pri red" onclick="go('reject')">Reject${canEmail ? ' &amp; send' : ''}</button><button onclick="hideReject()">Back</button></div>
+    </div>
+    <p id="msg" class="s"></p>
     <script>
-      function go(a){ document.querySelectorAll('button').forEach(b=>b.disabled=true); document.getElementById('msg').textContent = a==='approve' ? 'Creating issue…' : 'Rejecting…';
-        google.script.run.withSuccessHandler(function(r){ document.getElementById('msg').innerHTML = r.ok ? (a==='approve' ? '✅ Approved — <a target="_blank" href="'+r.url+'">issue #'+r.number+'</a> created. Claude will pick it up within the hour.' : 'Rejected.') : ('⚠️ ' + r.error); if(!r.ok) document.querySelectorAll('button').forEach(b=>b.disabled=false); })
-          .withFailureHandler(function(err){ document.getElementById('msg').textContent='⚠️ '+err.message; document.querySelectorAll('button').forEach(b=>b.disabled=false); })
-          .decide(${JSON.stringify(String(p.id))}, ${JSON.stringify(String(p.sig))}, a); }
-    </script>`;
+      var KIND = ${JSON.stringify(kind)}, TITLE = ${JSON.stringify(String(title))};
+      function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+      function showReject(){ document.getElementById('appr').style.display='none'; document.getElementById('rej').style.display=''; document.getElementById('note').focus(); prev(); }
+      function hideReject(){ document.getElementById('rej').style.display='none'; document.getElementById('appr').style.display=''; }
+      function prev(){ var pv = document.getElementById('pv'); if (!pv) return; var on = document.getElementById('mail').checked; pv.style.opacity = on ? 1 : .4;
+        pv.innerHTML = ${JSON.stringify('__PREVIEW__')}.replace('__NOTE__', (function(){ var n = document.getElementById('note').value.trim(); return n ? '<p style="margin:14px 0 4px"><b>A note from me:</b></p><blockquote>' + esc(n).replace(/\\n/g,'<br>') + '</blockquote>' : ''; })()); }
+      function go(a){
+        var note = a === 'reject' ? document.getElementById('note').value.trim() : '';
+        var mail = a === 'reject' && !!document.getElementById('mail') && document.getElementById('mail').checked;
+        document.querySelectorAll('button').forEach(function(b){ b.disabled = true; });
+        document.getElementById('msg').textContent = a === 'approve' ? 'Creating issue…' : 'Rejecting…';
+        google.script.run.withSuccessHandler(function(r){
+            document.getElementById('msg').innerHTML = r.ok ? (a === 'approve' ? '✅ Approved — <a target="_blank" href="' + r.url + '">issue #' + r.number + '</a> created. Claude will pick it up within the hour.' : ('Rejected.' + (r.emailed ? ' ✉️ The reporter was emailed.' : ''))) : ('⚠️ ' + r.error);
+            if (!r.ok) document.querySelectorAll('button').forEach(function(b){ b.disabled = false; });
+            else { document.getElementById('appr').style.display = 'none'; document.getElementById('rej').style.display = 'none'; } })
+          .withFailureHandler(function(err){ document.getElementById('msg').textContent = '⚠️ ' + err.message; document.querySelectorAll('button').forEach(function(b){ b.disabled = false; }); })
+          .decide(${JSON.stringify(String(p.id))}, ${JSON.stringify(String(p.sig))}, a, note, mail); }
+      prev();
+    </script>`.replace('"__PREVIEW__"', () => JSON.stringify(rejectedEmailHtml_(kind, title, '__NOTE__', true).replace(/\n\s*/g, ' ')));
   return page_('Review feedback', body);
 }
 
 /** Called from the review page. */
-function decide(id, sig, action) {
+function decide(id, sig, action, note, emailReporter) {
   if (!validSig_(id, sig)) return { ok: false, error: 'Invalid link' };
   const lock = LockService.getScriptLock(); lock.waitLock(20000);
   try {
@@ -184,8 +211,17 @@ function decide(id, sig, action) {
     const v = sh.getRange(row, 1, 1, COLS.length).getValues()[0];
     if (v[C['Status'] - 1] !== 'pending') return { ok: false, error: 'Already ' + v[C['Status'] - 1] };
     if (action === 'reject') {
+      const why = clean_(note, 2000);
+      if (sh.getRange(1, C['Owner note']).getValue() !== 'Owner note') sh.getRange(1, C['Owner note']).setValue('Owner note').setFontWeight('bold');
       sh.getRange(row, C['Status']).setValue('rejected'); sh.getRange(row, C['Decided']).setValue(new Date());
-      return { ok: true };
+      if (why) sh.getRange(row, C['Owner note']).setValue(why);
+      let emailed = false;
+      if (emailReporter && v[C['Wants email'] - 1] === 'yes' && v[C['Reporter email'] - 1] && !v[C['Reporter notified'] - 1]) {
+        sendRejectedEmail_(v[C['Reporter email'] - 1], v[C['Type'] - 1], v[C['Title'] - 1], why);
+        sh.getRange(row, C['Reporter notified']).setValue(new Date());
+        emailed = true;
+      }
+      return { ok: true, emailed };
     }
     const issue = createIssue_(v);
     sh.getRange(row, C['Status']).setValue('approved');
@@ -302,6 +338,28 @@ function sendShippedEmail_(to, kind, title, version, issueUrl) {
   MailApp.sendEmail({ to, subject: `Your Margin ${kind === 'bug' ? 'bug report' : 'idea'} is live: ${title}`.slice(0, 180), htmlBody: html, name: 'Margin' });
 }
 
+/** Polite "not this time" email. `noteHtml` is already-escaped HTML (or a placeholder for the live preview). */
+function rejectedEmailHtml_(kind, title, noteHtml, isPreview) {
+  const decision = kind === 'bug'
+    ? 'After looking into it, I’ve decided not to make a change for this report right now.'
+    : 'After thinking it over carefully, I’ve decided not to add this to Margin right now.';
+  const noteBlock = isPreview ? noteHtml : (noteHtml ? `<p style="margin:16px 0 6px"><b>A note from me:</b></p><blockquote style="margin:0;padding:10px 14px;border-left:3px solid #2d5be3;background:#f6f5f1;border-radius:6px;white-space:pre-wrap">${noteHtml}</blockquote>` : '');
+  return `
+  <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:560px;color:#1d1d1f;line-height:1.55">
+    <p>Hi there,</p>
+    <p>Thank you so much for taking the time to send your ${kind === 'bug' ? 'bug report' : 'idea'}, <b>“${esc_(title)}”</b>. Feedback like yours genuinely helps shape Margin, and I read every one.</p>
+    <p>${decision}</p>
+    ${noteBlock}
+    <p>I really appreciate you sharing it, and I’d love to keep hearing from you. If you have other ideas or spot anything that isn’t working, please send them any time with the 💬 Feedback button in the app.</p>
+    <p>Thanks again,<br>Gavin, Margin</p>
+    <p style="color:#6e6e73;font-size:12.5px">You’re getting this because you asked for updates about your feedback. This is the only email you’ll get about it.</p>
+  </div>`;
+}
+function sendRejectedEmail_(to, kind, title, note) {
+  const noteHtml = note ? esc_(note) : '';
+  MailApp.sendEmail({ to, subject: `About your Margin ${kind === 'bug' ? 'bug report' : 'idea'}: ${title}`.slice(0, 180), htmlBody: rejectedEmailHtml_(kind, title, noteHtml, false), name: 'Margin' });
+}
+
 /* ---------------------------------------------------------------- helpers */
 
 function gh_(method, path, body) {
@@ -340,5 +398,7 @@ function page_(title, inner) {
     h1{font-size:22px;margin:4px 0 12px}.k{color:#6e6e73;margin:0}.d{white-space:pre-wrap;background:#fff;border-radius:12px;padding:14px;border:1px solid #e4e2db}
     .b{display:flex;gap:10px;margin:22px 0 8px}button{font:inherit;font-weight:600;padding:12px 18px;border-radius:10px;border:1px solid #d6d3ca;background:#fff;cursor:pointer}
     button.pri{background:#2d5be3;color:#fff;border-color:#2d5be3}button.red{background:#d0362b;border-color:#d0362b}button:disabled{opacity:.5}.s{color:#3a3a3c}a{color:#2d5be3}
+    h2{font-size:17px;margin:22px 0 8px}label{display:block;font-weight:600;font-size:14px;margin:6px 0}textarea{width:100%;box-sizing:border-box;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid #d6d3ca;background:#fff}
+    .chk{display:flex;gap:8px;align-items:center;font-weight:500;margin-top:10px}.pv{background:#fff;border:1px solid #e4e2db;border-radius:12px;padding:4px 16px;font-size:14px}.pv blockquote{margin:6px 0 10px;padding:10px 14px;border-left:3px solid #2d5be3;background:#f6f5f1;border-radius:6px;white-space:pre-wrap}
   </style></head><body>${inner}</body></html>`).setTitle(title).addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }

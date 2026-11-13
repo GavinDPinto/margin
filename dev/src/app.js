@@ -5,7 +5,7 @@
    Margin — a local-first handwritten notes app
    ===================================================================== */
 
-const APP_VERSION = '13 · scribble to erase';
+const APP_VERSION = '14 · feedback update emails';
 // Google Apps Script web-app URL that receives feedback (see feedback/SETUP.md). Empty = feedback not set up yet.
 const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec';
 const PAGE_W = 816, PAGE_H = 1056;          // page units (Letter @ 96dpi)
@@ -2194,7 +2194,7 @@ async function feedbackDialog() {
     <div class="fb-files"></div>
     <div class="fb-add-row"><button class="btn fb-add" type="button">${icon('image')}Add photos or videos</button>${E.open ? `<label class="fb-check"><input type="checkbox" class="fb-page" checked> Include a picture of this page</label>` : ''}</div>
     <label class="lbl">Your email <span class="opt">optional</span></label><input class="inp fb-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" value="${esc(saved.email || '')}">
-    <label class="fb-check"><input type="checkbox" class="fb-notify" ${saved.notify ? 'checked' : ''}> Email me when this is fixed or added</label>
+    <label class="fb-check"><input type="checkbox" class="fb-notify" ${saved.notify ? 'checked' : ''}> Email me updates about this request</label>
     <p class="muted fb-tip">💡 One idea or bug per report gets it built fastest. Several things at once are fine too: each one is built separately.</p>
     <p class="muted fb-note">Your email is only seen by the developer and is never posted publicly. If approved, your title, description and attachments become a public GitHub issue.</p>
     <p class="fb-err" hidden></p>`;
