@@ -255,6 +255,27 @@ canvas.live{z-index:1}
 .sel-bar.paste-bar{transform:translate(-50%,-100%)}
 .sel-bar button{touch-action:manipulation}
 
+/* feedback form */
+.fb-kind{display:flex;width:100%}
+.fb-kind button{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;height:38px}
+.fb-kind .ic{width:18px;height:18px}
+textarea.inp{height:auto;padding:10px 12px;resize:vertical;line-height:1.4;font:inherit;font-size:16px}
+.lbl .opt{text-transform:none;letter-spacing:0;font-weight:500;color:var(--faint)}
+.fb-files{display:flex;flex-wrap:wrap;gap:8px}
+.fb-files:empty{display:none}
+.fb-chip{display:flex;align-items:center;gap:7px;height:34px;padding:0 4px 0 10px;border-radius:9px;background:#f2f1ed;font-size:13px;max-width:100%}
+.fb-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px}
+.fb-chip small{color:var(--muted)}
+.fb-chip .ic{width:16px;height:16px;color:var(--muted)}
+.fb-chip button{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center}
+.fb-add-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px}
+.fb-check{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:10px}
+.fb-add-row .fb-check{margin-top:0}
+.fb-check input{width:18px;height:18px;accent-color:var(--accent)}
+.fb-note{margin-top:12px}
+.fb-err{color:var(--danger);font-size:13.5px;margin:8px 0 0}
+.mbtns .btn:disabled{opacity:.6}
+
 </style>
 </head>
 <body>
@@ -269,6 +290,7 @@ canvas.live{z-index:1}
       <option value="created">Date created</option>
       <option value="name">Name</option>
     </select>
+    <button id="btn-feedback" class="ibtn" title="Send feedback" aria-label="Send feedback"></button>
     <button id="btn-settings" class="ibtn" title="Settings" aria-label="Settings"></button>
   </header>
   <div class="lib-bar">
@@ -321,7 +343,9 @@ canvas.live{z-index:1}
    Margin — a local-first handwritten notes app
    ===================================================================== */
 
-const APP_VERSION = '4 · lasso copy/cut/paste, images, crop';
+const APP_VERSION = '5 · in-app feedback';
+// Google Apps Script web-app URL that receives feedback (see feedback/SETUP.md). Empty = feedback not set up yet.
+const FEEDBACK_URL = '';
 const PAGE_W = 816, PAGE_H = 1056;          // page units (Letter @ 96dpi)
 const HL_ALPHA = 0.36;
 const MAX_CANVAS_PX = 9.5e6;                // per-canvas pixel cap (iOS safe)
@@ -369,6 +393,10 @@ const ICON = {
   download: '<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/>',
   upload: '<path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M5 19.5h14"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  feedback: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4h0A1.5 1.5 0 0 1 4 14.5z"/><path d="M8.5 8.5h7M8.5 11.5h4"/>',
+  bug: '<rect x="7" y="7" width="10" height="13" rx="5"/><path d="M12 11v9M4 13h3M17 13h3M5 8l2.5 2M19 8l-2.5 2M5 19l2.5-2M19 19l-2.5-2M9.5 7.2 8 4.5M14.5 7.2 16 4.5"/>',
+  bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  video: '<rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10.5 5-3v9l-5-3"/>',
   scissors: '<circle cx="6" cy="6" r="2.6"/><circle cx="6" cy="18" r="2.6"/><path d="M8.2 7.6 20 17M8.2 16.4 20 7"/>',
   paste: '<rect x="6" y="4.5" width="12" height="16" rx="2"/><path d="M9.5 4.5V3.8a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v.7"/><path d="M9.5 10h5M9.5 14h5"/>',
   crop: '<path d="M6 2.5V17a1 1 0 0 0 1 1h14.5"/><path d="M2.5 6H17a1 1 0 0 1 1 1v14.5"/>',
@@ -686,6 +714,8 @@ function renderLib() {
 
 function bindLibrary() {
   $('#btn-settings').innerHTML = icon('gear');
+  $('#btn-feedback').innerHTML = icon('feedback');
+  $('#btn-feedback').addEventListener('click', () => feedbackDialog());
   $('#btn-new-folder').innerHTML = icon('folderplus') + '<span>New Folder</span>';
   $('#btn-import').innerHTML = icon('import') + '<span>Import</span>';
   $('#btn-new-note').innerHTML = icon('plus') + '<span>New Note</span>';
@@ -1452,6 +1482,8 @@ function editorMenu(anchor) {
     { label: 'Draw with finger', icon: 'finger', right: SET.fingerDraw ? 'On' : 'Off', fn: () => { SET.fingerDraw = !SET.fingerDraw; saveSettings(); toast(SET.fingerDraw ? 'Finger drawing on — use two fingers to scroll' : 'Finger drawing off — fingers scroll, Pencil draws'); } },
     '-',
     { label: 'Export as PDF', icon: 'share', fn: () => { commitActiveText(); exportPdf(E.pages, E.note.title); } },
+    '-',
+    { label: 'Send feedback', icon: 'feedback', fn: feedbackDialog },
   ], { alignRight: true });
   void cp;
 }
@@ -2280,6 +2312,112 @@ function bindEditor() {
     if (e.key === 'Escape') clearSelection();
   });
   window.addEventListener('resize', () => { if (E.open) { const ns = fitScale(); if (E.s < ns * 1.02 && E.s > ns * 0.6) setScale(ns); else scheduleRerender(); } });
+}
+
+/* =====================================================================
+   FEEDBACK (bug reports & feature requests → owner approval → GitHub)
+   ===================================================================== */
+const FB_MAX_FILES = 6, FB_MAX_BYTES = 24 * 1048576, FB_MAX_VIDEO = 18 * 1048576;
+async function fileToB64(blob) { return abToB64(await blob.arrayBuffer()); }
+async function shrinkImage(file) {
+  // keep screenshots readable but small
+  try {
+    const url = URL.createObjectURL(file), img = new Image(); img.src = url; await img.decode();
+    const s = Math.min(1, 1800 / Math.max(img.naturalWidth, img.naturalHeight));
+    if (s >= 1 && file.size < 1.5 * 1048576) { URL.revokeObjectURL(url); return file; }
+    const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url);
+    const b = await canvasToBlob(c, 'image/jpeg', 0.85); c.width = c.height = 0;
+    return new File([b], (file.name || 'image').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch (e) { return file; }
+}
+async function feedbackDialog() {
+  if (!FEEDBACK_URL) { modal({ title: 'Feedback isn’t set up yet', body: '<p>The developer hasn’t connected the feedback service yet. Please check back soon.</p>', buttons: [{ label: 'OK', primary: true, value: true }] }); return; }
+  let saved = {}; try { saved = JSON.parse(localStorage.getItem('margin.fb') || '{}'); } catch (e) {}
+  const st = { kind: 'bug', files: [], page: E.open };
+  const body = document.createElement('div'); body.className = 'fb-form';
+  body.innerHTML = `
+    <div class="seg fb-kind"><button data-k="bug" class="on">${icon('bug')}Report a bug</button><button data-k="feature">${icon('bulb')}Suggest a feature</button></div>
+    <label class="lbl">Short title</label><input class="inp fb-title" maxlength="120" placeholder="e.g. Eraser misses fast strokes" autocomplete="off">
+    <label class="lbl fb-dlbl">What happened? What did you expect?</label><textarea class="inp fb-desc" rows="5" maxlength="5000" placeholder="Steps to reproduce help a lot"></textarea>
+    <label class="lbl">Screenshots or videos <span class="opt">optional</span></label>
+    <div class="fb-files"></div>
+    <div class="fb-add-row"><button class="btn fb-add" type="button">${icon('image')}Add photos or videos</button>${E.open ? `<label class="fb-check"><input type="checkbox" class="fb-page" checked> Include a picture of this page</label>` : ''}</div>
+    <label class="lbl">Your email <span class="opt">optional</span></label><input class="inp fb-email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" value="${esc(saved.email || '')}">
+    <label class="fb-check"><input type="checkbox" class="fb-notify" ${saved.notify ? 'checked' : ''}> Email me when this is fixed or added</label>
+    <p class="muted fb-note">Your email is only seen by the developer and is never posted publicly. If approved, your title, description and attachments become a public GitHub issue.</p>
+    <p class="fb-err" hidden></p>`;
+  const drawFiles = () => {
+    $('.fb-files', body).innerHTML = st.files.map((f, i) => `<span class="fb-chip">${icon(/^video/.test(f.type) ? 'video' : 'image')}<span>${esc(f.name || 'file')}</span><small>${(f.size / 1048576).toFixed(1)} MB</small><button data-rm="${i}" aria-label="Remove">${icon('x')}</button></span>`).join('');
+  };
+  const setKind = k => { st.kind = k; $$('.fb-kind button', body).forEach(b => b.classList.toggle('on', b.dataset.k === k));
+    $('.fb-dlbl', body).textContent = k === 'bug' ? 'What happened? What did you expect?' : 'What would you like Margin to do?';
+    $('.fb-desc', body).placeholder = k === 'bug' ? 'Steps to reproduce help a lot' : 'Describe the feature and how you’d use it'; };
+  const err = m => { const e = $('.fb-err', body); e.textContent = m || ''; e.hidden = !m; };
+  body.addEventListener('click', async e => {
+    const k = e.target.closest('[data-k]'); if (k) { setKind(k.dataset.k); return; }
+    const rm = e.target.closest('[data-rm]'); if (rm) { st.files.splice(+rm.dataset.rm, 1); drawFiles(); return; }
+    if (e.target.closest('.fb-add')) {
+      const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*,video/*'; inp.multiple = true;
+      inp.onchange = async () => {
+        for (const f of [...inp.files]) {
+          if (st.files.length >= FB_MAX_FILES) { err(`Up to ${FB_MAX_FILES} files`); break; }
+          if (/^video\//.test(f.type)) { if (f.size > FB_MAX_VIDEO) { err(`“${f.name}” is over ${FB_MAX_VIDEO / 1048576} MB — try a shorter clip`); continue; } st.files.push(f); }
+          else if (/^image\//.test(f.type)) st.files.push(await shrinkImage(f));
+        }
+        drawFiles();
+      };
+      inp.click();
+    }
+  });
+  const send = async (b, close) => {
+    err('');
+    const title = $('.fb-title', b).value.trim(), desc = $('.fb-desc', b).value.trim();
+    const email = $('.fb-email', b).value.trim(), notify = $('.fb-notify', b).checked;
+    if (!desc && !title) { err('Please describe the bug or feature.'); return; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { err('That email doesn’t look right.'); return; }
+    if (notify && !email) { err('Add your email to get notified, or untick the box.'); return; }
+    const btn = $('.mbtns .btn.primary', b); btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const files = st.files.slice();
+      const pg = $('.fb-page', b);
+      if (pg && pg.checked && E.open && E.pages[E.cur]) {
+        commitActiveText();
+        const p = E.pages[E.cur], c = await renderPageToCanvas(p, Math.min(1.5, 1600 / p.w));
+        files.unshift(new File([await canvasToBlob(c, 'image/jpeg', 0.85)], `page-${E.cur + 1}.jpg`, { type: 'image/jpeg' })); c.width = c.height = 0;
+      }
+      const total = files.reduce((a, f) => a + f.size, 0);
+      if (total > FB_MAX_BYTES) throw new Error(`Attachments are ${(total / 1048576).toFixed(1)} MB — please keep them under ${FB_MAX_BYTES / 1048576} MB.`);
+      const payload = {
+        id: uid(), kind: st.kind, title: title || desc.slice(0, 80), description: desc, email: email || '', notify: !!(notify && email),
+        meta: { version: APP_VERSION, ua: navigator.userAgent, screen: `${screen.width}×${screen.height} @${dpr()}x`, standalone: !!(navigator.standalone || matchMedia('(display-mode: standalone)').matches), pencil: !!E.penSeen, url: location.origin + location.pathname },
+        files: await Promise.all(files.map(async f => ({ name: f.name || 'file', type: f.type || 'application/octet-stream', data: await fileToB64(f) }))),
+      };
+      try { localStorage.setItem('margin.fb', JSON.stringify({ email, notify })); } catch (e) {}
+      await postFeedback(payload);
+      close(true);
+      modal({ title: 'Thanks!', body: `<p>Your ${st.kind === 'bug' ? 'bug report' : 'idea'} was sent. The developer will review it${payload.notify ? ', and you’ll get an email when it’s done' : ''}.</p>`, buttons: [{ label: 'Done', primary: true, value: true }] });
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Send';
+      err(navigator.onLine === false ? 'You’re offline — connect to the internet and try again.' : (e.message || 'Couldn’t send — please try again.'));
+    }
+  };
+  modal({ title: 'Send feedback', body, wide: true, buttons: [{ label: 'Cancel', value: null }, { label: 'Send', primary: true, value: () => false }],
+    onOpen: (b, close) => { $('.mbtns .btn.primary', b).addEventListener('click', () => send(b, close)); $('.fb-title', b).focus(); } });
+}
+async function postFeedback(payload) {
+  const body = JSON.stringify(payload);
+  try {
+    const r = await fetch(FEEDBACK_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' });
+    let j = null; try { j = await r.json(); } catch (e) {}
+    if (j && j.ok === false) throw Object.assign(new Error(j.error || 'The feedback service refused the report.'), { server: true });
+    return;
+  } catch (e) {
+    if (e.server) throw e;
+    // Response unreadable (CORS) — send again without reading it; the server ignores duplicate ids.
+    await fetch(FEEDBACK_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body });
+  }
 }
 
 /* =====================================================================

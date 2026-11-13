@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Margin">
+<meta name="theme-color" content="#f6f5f1">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Margin</title>
+<style>
+/*CSS*/
+</style>
+</head>
+<body>
+
+<!-- ============ LIBRARY ============ -->
+<section id="library" class="view">
+  <header class="lib-head">
+    <div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M15.5 4.5l4 4L9 19l-5 1 1-5z"/></svg></span>Margin</div>
+    <label class="search"><svg viewBox="0 0 24 24" class="ic"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input id="search" type="search" placeholder="Search notes" autocomplete="off"></label>
+    <select id="sort" class="sel" aria-label="Sort">
+      <option value="updated">Last edited</option>
+      <option value="created">Date created</option>
+      <option value="name">Name</option>
+    </select>
+    <button id="btn-feedback" class="ibtn" title="Send feedback" aria-label="Send feedback"></button>
+    <button id="btn-settings" class="ibtn" title="Settings" aria-label="Settings"></button>
+  </header>
+  <div class="lib-bar">
+    <nav id="crumbs"></nav>
+    <div class="lib-actions">
+      <button id="btn-new-folder" class="btn"></button>
+      <button id="btn-import" class="btn"></button>
+      <button id="btn-new-note" class="btn primary"></button>
+    </div>
+  </div>
+  <main id="grid"></main>
+</section>
+
+<!-- ============ EDITOR ============ -->
+<section id="editor" class="view" hidden>
+  <header class="ed-top">
+    <button id="ed-back" class="btn ghost"></button>
+    <input id="ed-title" class="ed-title" type="text" spellcheck="false" autocomplete="off">
+    <div class="sp"></div>
+    <button id="ed-undo" class="ibtn" title="Undo (⌘Z)" aria-label="Undo"></button>
+    <button id="ed-redo" class="ibtn" title="Redo (⇧⌘Z)" aria-label="Redo"></button>
+    <button id="ed-image" class="ibtn" title="Insert image" aria-label="Insert image"></button>
+    <button id="ed-addpage" class="ibtn" title="Add page after this one" aria-label="Add page"></button>
+    <button id="ed-more" class="ibtn" title="More" aria-label="More"></button>
+  </header>
+  <div class="ed-tools" id="toolbar">
+    <div class="tgroup" id="tb-tools"></div>
+    <div class="tdiv"></div>
+    <div class="tgroup" id="tb-colors"></div>
+    <div class="tdiv" id="tb-div2"></div>
+    <div class="tgroup" id="tb-sizes"></div>
+    <div class="tdiv" id="tb-div3"></div>
+    <div class="tgroup" id="tb-opts"></div>
+  </div>
+  <div id="scroller"><div id="pages"></div></div>
+  <div id="page-ind">1 / 1</div>
+</section>
+
+<input id="file-pdf" type="file" accept="application/pdf,.pdf,image/*" multiple hidden>
+<input id="file-img" type="file" accept="image/*" multiple hidden>
+<input id="file-backup" type="file" accept="application/json,.json" hidden>
+<input id="color-input" type="color" class="color-input">
+<div id="toast" role="status"></div>
+
+<script>
+/*JS*/
+</script>
+</body>
+</html>

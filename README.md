@@ -64,6 +64,9 @@ iPadOS doesn't let web apps appear in the Share sheet (only native apps can). Ma
 - **Paste:** copy an image (or a PDF, where the app allows it), then use **Import → Paste** or **⋯ → Paste image or PDF** in a note. With a keyboard, ⌘V works too.
 - **Android / desktop Chrome:** once installed, Margin *does* appear in the Share sheet and asks new or existing.
 
+## Feedback
+The 💬 button in the library (or **⋯ → Send feedback** in a note) sends a bug report or feature idea, with optional screenshots or videos. The developer approves each one. Approved requests are built automatically and shipped. If you leave your email, you'll get a note when yours is live. Developer setup: [`feedback/SETUP.md`](feedback/SETUP.md).
+
 ## Back up your notes
 Settings (gear) → **Export** saves everything in one `.json` file. Save it to Files or iCloud Drive. **Import** restores it, even on another device.
 
