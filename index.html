@@ -343,7 +343,7 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical;line-height:1.4;font:
    Margin — a local-first handwritten notes app
    ===================================================================== */
 
-const APP_VERSION = '6 · feedback connected';
+const APP_VERSION = '7 · clearer feedback errors';
 // Google Apps Script web-app URL that receives feedback (see feedback/SETUP.md). Empty = feedback not set up yet.
 const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec';
 const PAGE_W = 816, PAGE_H = 1056;          // page units (Letter @ 96dpi)
@@ -2354,7 +2354,10 @@ async function feedbackDialog() {
   const setKind = k => { st.kind = k; $$('.fb-kind button', body).forEach(b => b.classList.toggle('on', b.dataset.k === k));
     $('.fb-dlbl', body).textContent = k === 'bug' ? 'What happened? What did you expect?' : 'What would you like Margin to do?';
     $('.fb-desc', body).placeholder = k === 'bug' ? 'Steps to reproduce help a lot' : 'Describe the feature and how you’d use it'; };
-  const err = m => { const e = $('.fb-err', body); e.textContent = m || ''; e.hidden = !m; };
+  const err = m => {
+    const e = $('.fb-err', body); e.textContent = m || ''; e.hidden = !m;
+    if (m) { try { e.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (x) {} toast(m, 5000); }
+  };
   body.addEventListener('click', async e => {
     const k = e.target.closest('[data-k]'); if (k) { setKind(k.dataset.k); return; }
     const rm = e.target.closest('[data-rm]'); if (rm) { st.files.splice(+rm.dataset.rm, 1); drawFiles(); return; }

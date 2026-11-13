@@ -109,7 +109,7 @@ function doPost(e) {
     return json_({ ok: true });
   } catch (err) {
     console.error(err);
-    return json_({ ok: false, error: 'The feedback service hit an error. Please try again later.' });
+    return json_({ ok: false, error: 'The feedback service hit an error (' + String(err && err.message || err).slice(0, 160) + '). Please try again later.' });
   }
 }
 
