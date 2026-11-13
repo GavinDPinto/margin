@@ -1711,7 +1711,7 @@ textarea.inp {
   }
 
   // src/js/core/version.js
-  var APP_VERSION = "15 · modular source";
+  var APP_VERSION = "16 · resize snapped shapes";
   var FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec";
 
   // src/js/ui/dialogs.js
@@ -3198,9 +3198,37 @@ textarea.inp {
     if (!D.active || D.mode !== "ink" || D.shape || !SET.shapes) return;
     const sh = recognizeShape(D.st.p);
     if (!sh) return;
+    const P = D.st.p, L2 = P.length - 3;
+    if (sh.kind !== "line") {
+      sh.base = sh.p.slice();
+      sh.hx = P[L2];
+      sh.hy = P[L2 + 1];
+      sh.r0 = Math.max(8, Math.hypot(P[L2] - sh.cx, P[L2 + 1] - sh.cy));
+      sh.grab = false;
+    }
     D.shape = sh;
     D.st.p = sh.p;
     redrawLiveInk();
+  }
+  function moveSnappedShape(ev) {
+    const sh = D.shape;
+    if (!sh.grab) {
+      if (Math.hypot(ev.clientX - D.hx, ev.clientY - D.hy) <= HOLD_SLOP) return;
+      sh.grab = true;
+    }
+    const { x, y } = toPage(ev), k = clamp(Math.hypot(x - sh.cx, y - sh.cy) / sh.r0, 0.05, 20), B = sh.base, out = new Array(B.length);
+    for (let i = 0; i < B.length; i += 3) {
+      out[i] = sh.cx + (B[i] - sh.cx) * k;
+      out[i + 1] = sh.cy + (B[i + 1] - sh.cy) * k;
+      out[i + 2] = B[i + 2];
+    }
+    sh.p = out;
+    D.st.p = out;
+    redrawLiveInk();
+  }
+  function moveSnapped(ev) {
+    if (D.shape.kind === "line") moveSnappedLine(ev);
+    else moveSnappedShape(ev);
   }
   function redrawLiveInk() {
     if (D.raf) {
@@ -3299,7 +3327,7 @@ textarea.inp {
       loc[i] = f.cx + x * c - y * sn;
       loc[i + 1] = f.cy + x * sn + y * c;
     }
-    return { kind, pr, p: loc };
+    return { kind, pr, p: loc, cx: f.cx, cy: f.cy };
   }
   function fitClosed(P, n, th) {
     const c = Math.cos(th), sn = Math.sin(th), X = new Float64Array(n), Y = new Float64Array(n);
@@ -3533,9 +3561,8 @@ textarea.inp {
     const evs = e.getCoalescedEvents && e.getCoalescedEvents() || [];
     const list = evs.length ? evs : [e];
     if (D.mode === "ink") {
-      if (D.shape) {
-        if (D.shape.kind === "line") moveSnappedLine(list[list.length - 1]);
-      } else {
+      if (D.shape) moveSnapped(list[list.length - 1]);
+      else {
         for (const ev of list) addInkPoint(ev);
         drawLiveInk();
         holdMove(e);
@@ -3895,7 +3922,7 @@ textarea.inp {
       }).join("") + `<button class="szval" data-act="size" data-popanchor title="Exact size">${icon("sliders")}${fmtSize(cfg.size)}</button>`;
     }
     let o = "";
-    const shp = `<button class="shp ${SET.shapes ? "on" : ""}" data-act="shapes" aria-pressed="${SET.shapes ? "true" : "false"}" title="Draw a line, rectangle or ellipse and hold still at the end to straighten it">${icon("shapes")}Hold to snap shapes</button>`;
+    const shp = `<button class="shp ${SET.shapes ? "on" : ""}" data-act="shapes" aria-pressed="${SET.shapes ? "true" : "false"}" title="Draw a line, rectangle or ellipse and hold still at the end to straighten it. Keep holding and drag to resize it">${icon("shapes")}Hold to snap shapes</button>`;
     const scr = `<button class="shp ${SET.scribble ? "on" : ""}" data-act="scribble" aria-pressed="${SET.scribble ? "true" : "false"}" title="Scribble back and forth over ink with the pen to erase it">${icon("scribble")}Scribble to erase</button>`;
     if (t === "pen") o = `<div class="seg"><button data-kind="fountain" class="${cfg.kind !== "ball" ? "on" : ""}">Fountain</button><button data-kind="ball" class="${cfg.kind === "ball" ? "on" : ""}">Ballpoint</button></div>${shp}${scr}`;
     else if (t === "eraser") o = `<div class="seg"><button data-emode="partial" class="${cfg.mode !== "stroke" ? "on" : ""}">Precise</button><button data-emode="stroke" class="${cfg.mode === "stroke" ? "on" : ""}">Whole stroke</button></div>`;

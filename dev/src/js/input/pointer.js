@@ -6,7 +6,7 @@ import { commitActiveText, createTextBox } from '../editor/text.js';
 import { beginErase, eraseSeg, queueEraseFrame } from '../input/eraser.js';
 import { onTouchDown, onTouchMove, onTouchUp, stopMomentum } from '../input/gestures.js';
 import { addInkPoint, beginInk, commitInk, drawLiveInk } from '../input/ink.js';
-import { disarmHold, holdMove, moveSnappedLine } from '../input/shapes.js';
+import { disarmHold, holdMove, moveSnapped } from '../input/shapes.js';
 import { drawCrop, moveCrop, positionCropUI } from '../selection/images.js';
 import { beginLasso, clearSelection, drawSelection, finishLasso, finishMove, moveResize, queueLassoFrame, queueMoveFrame, showSelBar, startHandleDrag } from '../selection/selection.js';
 import { toast } from '../ui/dialogs.js';
@@ -76,7 +76,7 @@ export function onPointerMove(e) {
   const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
   const list = evs.length ? evs : [e];
   if (D.mode === 'ink') {
-    if (D.shape) { if (D.shape.kind === 'line') moveSnappedLine(list[list.length - 1]); }
+    if (D.shape) moveSnapped(list[list.length - 1]);
     else { for (const ev of list) addInkPoint(ev); drawLiveInk(); holdMove(e); }
   }
   else if (D.mode === 'erase') { for (const ev of list) { const { x, y } = toPage(ev); eraseSeg(D.ex, D.ey, x, y); D.ex = x; D.ey = y; } queueEraseFrame(); }

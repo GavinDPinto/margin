@@ -17,8 +17,19 @@ export function onHold() {
   D.holdT = 0;
   if (!D.active || D.mode !== 'ink' || D.shape || !SET.shapes) return;
   const sh = recognizeShape(D.st.p); if (!sh) return;
+  const P = D.st.p, L = P.length - 3;
+  if (sh.kind !== 'line') { sh.base = sh.p.slice(); sh.hx = P[L]; sh.hy = P[L + 1]; sh.r0 = Math.max(8, Math.hypot(P[L] - sh.cx, P[L + 1] - sh.cy)); sh.grab = false; }
   D.shape = sh; D.st.p = sh.p; redrawLiveInk();
 }
+// after a rectangle / ellipse snaps, keep holding and drag: away from the centre grows it, towards the centre shrinks it
+export function moveSnappedShape(ev) {
+  const sh = D.shape;
+  if (!sh.grab) { if (Math.hypot(ev.clientX - D.hx, ev.clientY - D.hy) <= HOLD_SLOP) return; sh.grab = true; }   // ignore the wobble of just holding
+  const { x, y } = toPage(ev), k = clamp(Math.hypot(x - sh.cx, y - sh.cy) / sh.r0, 0.05, 20), B = sh.base, out = new Array(B.length);
+  for (let i = 0; i < B.length; i += 3) { out[i] = sh.cx + (B[i] - sh.cx) * k; out[i + 1] = sh.cy + (B[i + 1] - sh.cy) * k; out[i + 2] = B[i + 2]; }
+  sh.p = out; D.st.p = out; redrawLiveInk();
+}
+export function moveSnapped(ev) { if (D.shape.kind === 'line') moveSnappedLine(ev); else moveSnappedShape(ev); }
 export function redrawLiveInk() {
   if (D.raf) { cancelAnimationFrame(D.raf); D.raf = 0; }
   const ctx = D.lctx; ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, live.width, live.height); ctx.restore();
@@ -95,7 +106,7 @@ export function recognizeShape(P) {
   const loc = kind === 'rect' ? shapeRect(-W / 2, -H / 2, W / 2, H / 2, pr) : shapeEllipse(0, 0, W / 2, H / 2, f.a0, pr);
   const c = Math.cos(f.th), sn = Math.sin(f.th);
   for (let i = 0; i < loc.length; i += 3) { const x = loc[i], y = loc[i + 1]; loc[i] = f.cx + x * c - y * sn; loc[i + 1] = f.cy + x * sn + y * c; }
-  return { kind, pr, p: loc };
+  return { kind, pr, p: loc, cx: f.cx, cy: f.cy };
 }
 // Fit a box/ellipse to the points in a frame tilted by th; mean distance of the points from each outline.
 export function fitClosed(P, n, th) {

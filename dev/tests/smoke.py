@@ -218,6 +218,18 @@ async def main():
             circ = [[ox + 340 + 70 * math.cos(a) * (1 + 0.05 * math.sin(3 * a)), oy + 140 + 55 * math.sin(a)] for a in [i / 40 * 2 * math.pi for i in range(44)]]
             await hold_draw('pen', 7, circ)
             st = await last(); check('hold snaps a rough ellipse', on_ellipse(st) < 0.02, f'err {on_ellipse(st):.3f}')
+            def span(st): q = pts_of(st); xs = [x for x, _ in q]; ys = [y for _, y in q]; return max(xs) - min(xs), max(ys) - min(ys)
+            w0, h0 = span(st); ex, ey = circ[-1]; dx, dy = ex - (ox + 340), ey - (oy + 140)
+            await hold_draw('pen', 7, circ, after=[[ox + 340 + dx * 1.5, oy + 140 + dy * 1.5], [ox + 340 + dx * 2, oy + 140 + dy * 2]])
+            st = await last(); w1, h1 = span(st)
+            check('snapped ellipse grows when the held pen moves outward', on_ellipse(st) < 0.02 and 1.7 < w1 / w0 < 2.3 and abs(w1 / h1 - w0 / h0) < 0.05, f'{w0:.0f}x{h0:.0f} -> {w1:.0f}x{h1:.0f}')
+            await page.click('#ed-undo')
+            bw, bh = span(await (lambda: J(page, '(()=>{const s=__margin.E.pages[__margin.E.cur].strokes;return s[s.length-2]})()'))())
+            ex, ey = boxpts[-1]; cx, cy = ox + 100, oy + 140
+            await hold_draw('pen', 7, [[x + 260, y] for x, y in boxpts], after=[[cx + 260 + (ex - cx) * 0.75, cy + (ey - cy) * 0.75], [cx + 260 + (ex - cx) * 0.5, cy + (ey - cy) * 0.5]])
+            st = await last(); w2, h2 = span(st)
+            check('snapped rectangle shrinks when the held pen moves to the centre', on_box(st) < 0.6 and 0.4 < w2 / bw < 0.65, f'{bw:.0f} -> {w2:.0f}')
+            await page.click('#ed-undo')
             await hold_draw('pen', 7, [[x, y + 160] for x, y in boxpts], hold=False)
             st = await last(); check('no hold keeps freehand shape', on_box(st) > 1, f'off-edge {on_box(st):.2f}')
             await page.click('[data-tool="hl"]')

@@ -44,7 +44,7 @@ export function renderToolbar() {
     }).join('') + `<button class="szval" data-act="size" data-popanchor title="Exact size">${icon('sliders')}${fmtSize(cfg.size)}</button>`;
   }
   let o = '';
-  const shp = `<button class="shp ${SET.shapes ? 'on' : ''}" data-act="shapes" aria-pressed="${SET.shapes ? 'true' : 'false'}" title="Draw a line, rectangle or ellipse and hold still at the end to straighten it">${icon('shapes')}Hold to snap shapes</button>`;
+  const shp = `<button class="shp ${SET.shapes ? 'on' : ''}" data-act="shapes" aria-pressed="${SET.shapes ? 'true' : 'false'}" title="Draw a line, rectangle or ellipse and hold still at the end to straighten it. Keep holding and drag to resize it">${icon('shapes')}Hold to snap shapes</button>`;
   const scr = `<button class="shp ${SET.scribble ? 'on' : ''}" data-act="scribble" aria-pressed="${SET.scribble ? 'true' : 'false'}" title="Scribble back and forth over ink with the pen to erase it">${icon('scribble')}Scribble to erase</button>`;
   if (t === 'pen') o = `<div class="seg"><button data-kind="fountain" class="${cfg.kind !== 'ball' ? 'on' : ''}">Fountain</button><button data-kind="ball" class="${cfg.kind === 'ball' ? 'on' : ''}">Ballpoint</button></div>${shp}${scr}`;
   else if (t === 'eraser') o = `<div class="seg"><button data-emode="partial" class="${cfg.mode !== 'stroke' ? 'on' : ''}">Precise</button><button data-emode="stroke" class="${cfg.mode === 'stroke' ? 'on' : ''}">Whole stroke</button></div>`;
