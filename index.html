@@ -347,7 +347,7 @@ textarea.inp{height:auto;padding:10px 12px;resize:vertical;line-height:1.4;font:
    Margin — a local-first handwritten notes app
    ===================================================================== */
 
-const APP_VERSION = '11 · hold to snap shapes';
+const APP_VERSION = '12 · rectangle lasso';
 // Google Apps Script web-app URL that receives feedback (see feedback/SETUP.md). Empty = feedback not set up yet.
 const FEEDBACK_URL = 'https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec';
 const PAGE_W = 816, PAGE_H = 1056;          // page units (Letter @ 96dpi)
@@ -434,6 +434,7 @@ const DEFAULTS = {
   pen: { color: '#1c1c1e', size: 2.2, kind: 'fountain', custom: '#8a5a2b' },
   hl: { color: '#ffe14d', size: 18, custom: '#ffc8a0' },
   eraser: { size: 26, mode: 'partial' },
+  lasso: { mode: 'free' },
   text: { color: '#1c1c1e', size: 20, custom: '#8a5a2b' },
 };
 function mergeDeep(a, b) { for (const k in b) { if (b[k] && typeof b[k] === 'object' && !Array.isArray(b[k]) && a[k] && typeof a[k] === 'object') mergeDeep(a[k], b[k]); else if (b[k] !== undefined) a[k] = b[k]; } return a; }
@@ -1411,7 +1412,7 @@ function renderToolbar() {
   const shp = `<button class="shp ${SET.shapes ? 'on' : ''}" data-act="shapes" aria-pressed="${SET.shapes ? 'true' : 'false'}" title="Draw a line, rectangle or ellipse and hold still at the end to straighten it">${icon('shapes')}Hold to snap shapes</button>`;
   if (t === 'pen') o = `<div class="seg"><button data-kind="fountain" class="${cfg.kind !== 'ball' ? 'on' : ''}">Fountain</button><button data-kind="ball" class="${cfg.kind === 'ball' ? 'on' : ''}">Ballpoint</button></div>${shp}`;
   else if (t === 'eraser') o = `<div class="seg"><button data-emode="partial" class="${cfg.mode !== 'stroke' ? 'on' : ''}">Precise</button><button data-emode="stroke" class="${cfg.mode === 'stroke' ? 'on' : ''}">Whole stroke</button></div>`;
-  else if (t === 'lasso') o = `<span class="hint">Circle or tap to select · drag to move · tap empty space to paste</span>`;
+  else if (t === 'lasso') { const rect = cfg.mode === 'rect'; o = `<div class="seg"><button data-lmode="free" class="${rect ? '' : 'on'}">Freeform</button><button data-lmode="rect" class="${rect ? 'on' : ''}">Rectangle</button></div><span class="hint">${rect ? 'Drag corner to corner' : 'Circle'} or tap to select · drag to move · tap empty space to paste</span>`; }
   else if (t === 'text') o = `<span class="hint">Tap the page to type</span>`;
   else if (t === 'hl') o = `${shp}<span class="hint">Highlights sit under your ink</span>`;
   $('#tb-opts').innerHTML = o;
@@ -1463,7 +1464,8 @@ function bindToolbar() {
     if (b.dataset.act === 'size') { sizePopover(b); return; }
     if (b.dataset.act === 'shapes') { SET.shapes = !SET.shapes; saveSettings(); renderToolbar(); toast(SET.shapes ? 'Shapes on — draw, then hold still to straighten' : 'Shape snapping off'); return; }
     if (b.dataset.kind) { cfg.kind = b.dataset.kind; saveSettings(); renderToolbar(); return; }
-    if (b.dataset.emode) { cfg.mode = b.dataset.emode; saveSettings(); renderToolbar(); }
+    if (b.dataset.emode) { cfg.mode = b.dataset.emode; saveSettings(); renderToolbar(); return; }
+    if (b.dataset.lmode) { cfg.mode = b.dataset.lmode; saveSettings(); renderToolbar(); }
   });
 }
 function quickPalette(anchor) {
@@ -1615,7 +1617,12 @@ function onPointerMove(e) {
     else { for (const ev of list) addInkPoint(ev); drawLiveInk(); holdMove(e); }
   }
   else if (D.mode === 'erase') { for (const ev of list) { const { x, y } = toPage(ev); eraseSeg(D.ex, D.ey, x, y); D.ex = x; D.ey = y; } queueEraseFrame(); }
-  else if (D.mode === 'lasso') { const { x, y } = toPage(e); D.lp.push(x, y); queueLassoFrame(); }
+  else if (D.mode === 'lasso') {
+    const { x, y } = toPage(e);
+    if (D.lrect) { const x0 = D.lx0, y0 = D.ly0; D.lp = [x0, y0, x, y0, x, y, x0, y]; }   // rectangle lasso: drag diagonally, corner to corner
+    else D.lp.push(x, y);
+    queueLassoFrame();
+  }
   else if (D.mode === 'move') { const { x, y } = toPage(e); E.sel.dx = x - D.mx; E.sel.dy = y - D.my; queueMoveFrame(); }
   else if (D.mode === 'resize') { const { x, y } = toPage(e); moveResize(x, y); }
   else if (D.mode === 'crop') { const { x, y } = toPage(e); moveCrop(x, y); }
@@ -1852,7 +1859,7 @@ function beginLasso(x, y) {
     D.mode = 'move'; D.mx = x; D.my = y; D.before = snap(D.v.page); E.sel.dx = 0; E.sel.dy = 0; setSelChrome(false); return;
   }
   clearSelection(); hidePasteBar();
-  D.mode = 'lasso'; D.lp = [x, y]; D.lctx = attachLive(D.v);
+  D.mode = 'lasso'; D.lp = [x, y]; D.lx0 = x; D.ly0 = y; D.lrect = SET.lasso.mode === 'rect'; D.lctx = attachLive(D.v);
 }
 function queueLassoFrame() {
   if (D.raf) return;

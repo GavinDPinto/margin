@@ -129,6 +129,24 @@ async def main():
             await tap(page, '.sel-bar [data-sa="done"]', 'pen')
             check('done clears selection', not await J(page, '!!__margin.E.sel'))
 
+            # ---------- rectangle lasso: drag corner to corner ----------
+            await page.click('#tb-opts [data-lmode="rect"]')
+            check('rectangle lasso option', await J(page, "__margin.SET.lasso.mode") == 'rect' and await J(page, "!!document.querySelector('#tb-opts [data-lmode=\"rect\"].on')"))
+            box = await J(page, """(()=>{const v=__margin.E.views.get(__margin.E.pages[0].id),r=v.el.getBoundingClientRect(),s=__margin.E.s;
+              let b=[1e9,1e9,-1e9,-1e9];for(const st of v.page.strokes){const q=st.bb;b=[Math.min(b[0],q[0]),Math.min(b[1],q[1]),Math.max(b[2],q[2]),Math.max(b[3],q[3])];}
+              const cy=(b[1]+b[3])/2;return [r.left+(b[0]-8)*s, r.top+(b[1]-8)*s, r.left+(b[2]+8)*s, r.top+cy*s];})()""")   # top half of the ink, edge to edge
+            await drag(page, 'pen', 7, [[box[0], box[1]], [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2], [box[2], box[3]]])   # straight diagonal: a freeform lasso would select nothing
+            want = await page.evaluate("""(([X0,Y0,X1,Y1])=>{const v=__margin.E.views.get(__margin.E.pages[0].id),r=v.el.getBoundingClientRect(),s=__margin.E.s;
+              const x0=(X0-r.left)/s,x1=(X1-r.left)/s,y0=(Y0-r.top)/s,y1=(Y1-r.top)/s;
+              return v.page.strokes.filter(st=>{let a=0,t=0;for(let i=0;i<st.p.length;i+=3){t++;if(st.p[i]>=x0&&st.p[i]<=x1&&st.p[i+1]>=y0&&st.p[i+1]<=y1)a++;}return a/t>=0.5;}).length})""", box)
+            total_now = await strokes(page)
+            got = await J(page, '__margin.E.sel ? __margin.E.sel.ids.size : 0')
+            check('rectangle lasso selects everything in the box', got >= 2 and got < total_now and abs(got - want) <= 1, f'{got} vs {want} of {total_now}')
+            await page.screenshot(path=str(SHOTS / 'rect-lasso.png'))
+            await tap(page, '.sel-bar [data-sa="done"]', 'pen')
+            await page.click('#tb-opts [data-lmode="free"]')
+            check('freeform lasso option restores', await J(page, "__margin.SET.lasso.mode") == 'free')
+
             # ---------- images: insert, resize, crop ----------
             async with page.expect_file_chooser() as fc: await page.click('#ed-image')
             await (await fc.value).set_files(str(FIX / 'photo.jpg')); await page.wait_for_timeout(900)
