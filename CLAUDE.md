@@ -45,7 +45,7 @@ Add a smoke-test check for every feature you add or bug you fix (in `dev/tests/s
 1. Users send feedback from the app (⋯ menu or 💬 button). It goes to the owner's Google Apps Script (`feedback/Code.gs`). Reports are logged in a private Google Sheet and attachments go into a private Drive folder.
 2. The owner gets an email and taps Approve. The script then opens a GitHub issue labelled `approved-feedback` plus `bug` or `enhancement`. Screenshots and videos are uploaded to the `feedback-media` branch and embedded in the issue.
 3. **The hourly task** works each open `approved-feedback` issue (oldest first, at most 3 per run). For each one it implements, tests and releases the change. It then comments `Shipped in Margin version N`, plus a short plain-English summary of what changed, adds the label `shipped`, closes the issue, and emails the owner.
-4. The Apps Script checks hourly for issues that are closed and labelled `shipped`. It emails reporters who opted in, from the owner's Gmail. **The agent never sees or sends reporter emails.**
+4. The Apps Script emails reporters who opted in, from the owner's Gmail, once an issue is closed and labelled `shipped`. It does this immediately when the hourly task opens the script's ping URL (`<FEEDBACK_URL>?a=check`, fetched with the WebFetch tool because the shell can't reach Google), and also checks hourly as a backup. **The agent never sees or sends reporter emails.**
 
 Labels: `approved-feedback` (queue) · `in-progress` (being worked) · `shipped` (done) · `needs-owner` (agent stopped, the owner decides) · `split` (parent of sub-issues) · `bug` / `enhancement`.
 

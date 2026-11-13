@@ -146,6 +146,7 @@ function sendApprovalEmail_(r) {
 
 function doGet(e) {
   const p = (e && e.parameter) || {};
+  if (p.a === 'check') return json_(pingCheckShipped_());
   if (p.a !== 'review') return HtmlService.createHtmlOutput('<p style="font-family:sans-serif">Margin feedback service is running.</p>');
   if (!validSig_(p.id, p.sig)) return page_('Link not valid', '<p>This review link is invalid or has expired.</p>');
   const sh = sheet_(), row = findRow_(sh, p.id);
@@ -238,9 +239,26 @@ function ensureMediaBranch_() {
 
 /* ---------------------------------------------- tell reporters it shipped */
 
+/**
+ * "Email reporters now" ping: the hourly Claude task opens `<web app URL>?a=check` right after it ships something,
+ * so reporters hear about it straight away instead of at the next hourly check. Safe to leave public: it only emails
+ * people whose request is already shipped and who asked to be told (once each), and it runs at most once a minute.
+ */
+function pingCheckShipped_() {
+  const cache = CacheService.getScriptCache();
+  if (cache.get('check-ping')) return { ok: true, skipped: 'ran less than a minute ago' };
+  cache.put('check-ping', '1', 60);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: true, skipped: 'busy' };
+  try { return { ok: true, notified: checkShipped() }; }
+  catch (err) { console.error(err); return { ok: false, error: String(err.message || err).slice(0, 160) }; }
+  finally { lock.releaseLock(); }
+}
+
 /** Runs hourly (trigger created by setup). Emails reporters who opted in once their issue is closed + labelled "shipped". */
 function checkShipped() {
-  const sh = sheet_(), last = sh.getLastRow(); if (last < 2) return;
+  const sh = sheet_(), last = sh.getLastRow(); if (last < 2) return 0;
+  let notified = 0;
   const rows = sh.getRange(2, 1, last - 1, COLS.length).getValues();
   rows.forEach((v, i) => {
     if (v[C['Status'] - 1] !== 'approved' || !v[C['Issue #'] - 1]) return;
@@ -253,8 +271,10 @@ function checkShipped() {
       const version = shippedVersion_(v[C['Issue #'] - 1]);
       sendShippedEmail_(v[C['Reporter email'] - 1], v[C['Type'] - 1], v[C['Title'] - 1], version, issue.html_url);
       sh.getRange(row, C['Reporter notified']).setValue(new Date());
+      notified++;
     }
   });
+  return notified;
 }
 
 function shippedVersion_(num) {

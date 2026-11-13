@@ -1,6 +1,7 @@
 // Runs feedback/Code.gs against mocked Google services to check the full flow. `node feedback/test/mock-run.js`
 const fs = require('fs'), vm = require('vm'), crypto = require('crypto'), path = require('path');
 const code = fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8');
+const cacheMap = {}; const cacheStore = { get: k => cacheMap[k], put: (k, v) => { cacheMap[k] = v; } };
 const props = {}, files = {}, mails = [], gh = [], sheetRows = [];
 let triggers = [];
 const blob = (bytes, type, name) => ({ bytes, type, name, getBytes: () => bytes, getContentType: () => type });
@@ -26,8 +27,8 @@ const ctx = {
     newBlob: blob, formatDate: (d, tz, f) => new Date(d).toISOString().slice(0, 13),
     computeHmacSha256Signature: (v, k) => [...crypto.createHmac('sha256', k).update(v).digest()].map(x => x > 127 ? x - 256 : x),
   },
-  CacheService: { getScriptCache: () => { const m = {}; return { get: k => m[k], put: (k, v) => { m[k] = v; } }; } },
-  LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+  CacheService: { getScriptCache: () => cacheStore },
+  LockService: { getScriptLock: () => ({ waitLock() {}, tryLock() { return true; }, releaseLock() {} }) },
   MailApp: { sendEmail: o => mails.push(o) },
   Session: { getEffectiveUser: () => ({ getEmail: () => 'owner@example.com' }) },
   ScriptApp: { getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/XYZ/exec' }), getProjectTriggers: () => triggers,
@@ -85,8 +86,14 @@ assert(ctx.decide(q.id, q.sig, 'approve').ok === false, 'cannot approve twice');
 assert(sheetRows[1][2] === 'approved' && sheetRows[1][11] === 7, 'sheet updated with issue #');
 
 ctx.checkShipped(); assert(mails.length === 1, 'no reporter email while issue open');
+const ping1 = JSON.parse(ctx.doGet({ parameter: { a: 'check' } }).text);
+assert(ping1.ok && ping1.notified === 0, 'ping endpoint runs the check (nothing shipped yet)');
+const ping2 = JSON.parse(ctx.doGet({ parameter: { a: 'check' } }).text);
+assert(ping2.skipped, 'ping is rate-limited to once a minute');
+delete cacheMap['check-ping'];
 issueState = { state: 'closed', labels: [{ name: 'shipped' }] };
-ctx.checkShipped();
+const ping3 = JSON.parse(ctx.doGet({ parameter: { a: 'check' } }).text);
+assert(ping3.notified === 1, 'ping emails the reporter as soon as it ships');
 assert(mails.length === 2 && mails[1].to === 'kid@example.com' && /version 6/.test(mails[1].htmlBody), 'reporter emailed once shipped (with version + steps)');
 ctx.checkShipped(); assert(mails.length === 2, 'reporter emailed only once');
 
