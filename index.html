@@ -217,6 +217,33 @@ canvas.live{z-index:1}
   .ed-title{width:30vw}
 }
 
+/* paper picker */
+.pp{display:flex;gap:22px;align-items:flex-start}
+.pp-ctl{flex:1;min-width:0}
+.pp-prev{flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:30px;position:sticky;top:0}
+.pp-prev canvas{border-radius:8px;box-shadow:0 0 0 1px var(--line2),0 6px 18px -8px rgba(0,0,0,.25)}
+.pp-slider{display:flex;align-items:center;gap:12px;margin-top:10px}
+.pp-slider input{flex:1;accent-color:var(--accent)}
+.pp-slider output{min-width:58px;text-align:right;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+@media (max-width:600px){.pp{flex-direction:column-reverse}.pp-prev{position:static;margin:0 auto}}
+/* destination picker */
+.dest-new{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line2);text-align:left}
+.dest-new .ic{width:24px;height:24px;color:var(--accent)}
+.dest-new b,.dest-row b{display:block;font-size:14.5px;font-weight:600}
+.dest-new small,.dest-row small{display:block;font-size:12.5px;color:var(--muted)}
+.dest-new:active,.dest-row:active,.dest-row:hover{background:#f3f2ee}
+.dest-q{margin-bottom:8px}
+.dest-list{display:flex;flex-direction:column;gap:2px;max-height:42vh;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:4px}
+.dest-row{display:flex;align-items:center;gap:11px;padding:6px 8px;border-radius:9px;text-align:left;width:100%}
+.dest-row img,.dest-row .pv{width:34px;height:44px;border-radius:4px;border:1px solid var(--line);object-fit:cover;object-position:top;flex:none}
+.dest-row .dm{min-width:0;flex:1}
+.dest-row b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dest-add{font-size:13px;font-weight:600;color:var(--accent);padding:0 6px}
+/* drag & drop */
+#drop-ov{position:fixed;inset:10px;z-index:70;border:2.5px dashed var(--accent);border-radius:20px;background:rgba(45,91,227,.07);display:flex;align-items:flex-end;justify-content:center;padding-bottom:44px;pointer-events:none}
+#drop-ov span{background:var(--accent);color:#fff;padding:10px 18px;border-radius:12px;font-weight:600;font-size:14px;box-shadow:0 8px 24px rgba(45,91,227,.35)}
+.tile.note.drop-hover .thumb{box-shadow:0 0 0 3px var(--accent);transform:scale(1.02)}
+
 </style>
 </head>
 <body>
@@ -268,7 +295,7 @@ canvas.live{z-index:1}
   <div id="page-ind">1 / 1</div>
 </section>
 
-<input id="file-pdf" type="file" accept="application/pdf,.pdf,image/*" hidden>
+<input id="file-pdf" type="file" accept="application/pdf,.pdf,image/*" multiple hidden>
 <input id="file-backup" type="file" accept="application/json,.json" hidden>
 <input id="color-input" type="color" class="color-input">
 <div id="toast" role="status"></div>
@@ -337,6 +364,13 @@ const TEMPLATES = [
   { id: 'dotted', name: 'Dotted' }, { id: 'blank', name: 'Blank' },
 ];
 const PAPERS = { white: ['#ffffff', 'White'], cream: ['#fbf6e8', 'Cream'], yellow: ['#fdf5c4', 'Legal'], gray: ['#f0f1f3', 'Gray'] };
+const SPACING = {
+  lined: { def: 32, min: 16, max: 64, presets: [[24, 'Narrow'], [32, 'Medium'], [42, 'Wide']] },
+  grid: { def: 24, min: 10, max: 64, presets: [[16, 'Small'], [24, 'Medium'], [36, 'Large']] },
+  dotted: { def: 24, min: 10, max: 64, presets: [[16, 'Small'], [24, 'Medium'], [36, 'Large']] },
+};
+const INKS = { light: [0.55, 'Light'], normal: [1, 'Normal'], bold: [1.9, 'Bold'] };
+const spacingOf = p => (p.spacing && SPACING[p.template]) ? clamp(p.spacing, SPACING[p.template].min, SPACING[p.template].max) : (SPACING[p.template] ? SPACING[p.template].def : 24);
 const PEN_COLORS = ['#1c1c1e', '#2a5bd7', '#d1352b', '#23885a', '#7a3fc6', '#e57a00'];
 const HL_COLORS = ['#ffe14d', '#86e58f', '#7cccff', '#ff98cc', '#ffb35c', '#bda4ff'];
 const FOLDER_COLORS = ['#2d5be3', '#e5484d', '#f5a524', '#30a46c', '#8e4ec6', '#0091ff', '#d6409f', '#6e6e73'];
@@ -345,7 +379,7 @@ const SIZE_RANGE = { pen: [0.5, 14, 0.1], hl: [4, 60, 1], eraser: [4, 120, 1], t
 
 /* ---------- settings ---------- */
 const DEFAULTS = {
-  fingerDraw: false, template: 'lined', paper: 'white', sort: 'updated', tool: 'pen',
+  fingerDraw: false, template: 'lined', paper: 'white', spacing: { lined: 32, grid: 24, dotted: 24 }, ink: 'normal', sort: 'updated', tool: 'pen',
   pen: { color: '#1c1c1e', size: 2.2, kind: 'fountain', custom: '#8a5a2b' },
   hl: { color: '#ffe14d', size: 18, custom: '#ffc8a0' },
   eraser: { size: 26, mode: 'partial' },
@@ -503,6 +537,14 @@ function deliverFile(blob, name, tryShare) {
     navigator.share({ files: [new File([blob], name, { type: blob.type })], title: name }).catch(err => { if (err && err.name !== 'AbortError') download(); });
   } else download();
 }
+function pickFiles(input) {
+  return new Promise(res => {
+    input.value = '';
+    const on = () => { input.removeEventListener('change', on); res(input.files ? [...input.files] : []); };
+    input.addEventListener('change', on);
+    input.click();
+  });
+}
 function pickFile(input) {
   return new Promise(res => {
     input.value = '';
@@ -511,17 +553,48 @@ function pickFile(input) {
     input.click();
   });
 }
-function paperPicker(tpl, paper) {
-  const el = document.createElement('div');
-  const st = { tpl, paper };
+function paperPicker(init) {
+  const el = document.createElement('div'); el.className = 'pp';
+  const st = { tpl: init.tpl || 'lined', paper: init.paper || 'white', ink: init.ink || 'normal', spacing: { ...SET.spacing, ...(init.spacing || {}) } };
   const draw = () => {
-    el.innerHTML = `<label class="lbl">Template</label><div class="tpl-pick">${TEMPLATES.map(t => `<button class="tpl ${t.id === st.tpl ? 'on' : ''}" data-t="${t.id}"><span class="pv pv-${t.id}" style="background-color:${PAPERS[st.paper][0]}"></span>${t.name}</button>`).join('')}</div>
-      <label class="lbl">Paper colour</label><div class="chips">${Object.entries(PAPERS).map(([k, v]) => `<button class="chip ${k === st.paper ? 'on' : ''}" data-p="${k}"><i style="background:${v[0]}"></i>${v[1]}</button>`).join('')}</div>`;
+    const sp = SPACING[st.tpl], val = sp ? st.spacing[st.tpl] : 0;
+    el.innerHTML = `<div class="pp-ctl">
+      <label class="lbl">Template</label><div class="tpl-pick">${TEMPLATES.map(t => `<button class="tpl ${t.id === st.tpl ? 'on' : ''}" data-t="${t.id}"><span class="pv pv-${t.id}" style="background-color:${PAPERS[st.paper][0]}"></span>${t.name}</button>`).join('')}</div>
+      ${sp ? `<label class="lbl">${st.tpl === 'lined' ? 'Line spacing' : st.tpl === 'grid' ? 'Square size' : 'Dot spacing'}</label>
+        <div class="chips">${sp.presets.map(([v, n]) => `<button class="chip ${v === val ? 'on' : ''}" data-sp="${v}">${n}</button>`).join('')}</div>
+        <div class="pp-slider"><input type="range" min="${sp.min}" max="${sp.max}" step="1" value="${val}" data-sprange><output>${(val / 96 * 25.4).toFixed(1)} mm</output></div>
+        <label class="lbl">Line strength</label><div class="chips">${Object.entries(INKS).map(([k, v]) => `<button class="chip ${k === st.ink ? 'on' : ''}" data-ink="${k}">${v[1]}</button>`).join('')}</div>` : ''}
+      <label class="lbl">Paper colour</label><div class="chips">${Object.entries(PAPERS).map(([k, v]) => `<button class="chip ${k === st.paper ? 'on' : ''}" data-p="${k}"><i style="background:${v[0]}"></i>${v[1]}</button>`).join('')}</div>
+    </div><div class="pp-prev"><canvas></canvas><span class="muted">Preview</span></div>`;
+    preview();
+  };
+  const preview = () => {
+    const c = $('.pp-prev canvas', el); if (!c) return;
+    const W = 168, k = W / PAGE_W * dpr();
+    c.width = Math.round(PAGE_W * k); c.height = Math.round(PAGE_H * k); c.style.width = W + 'px'; c.style.height = Math.round(W * PAGE_H / PAGE_W) + 'px';
+    const ctx = c.getContext('2d'); ctx.setTransform(k, 0, 0, k, 0, 0);
+    // preview a zoomed crop so spacing differences are visible
+    ctx.save(); ctx.scale(2, 2);
+    drawPaper(ctx, { w: PAGE_W / 2 + 1, h: PAGE_H / 2 + 1, template: st.tpl, paper: st.paper, spacing: st.spacing[st.tpl], ink: st.ink });
+    ctx.restore();
   };
   draw();
-  el.addEventListener('click', e => { const t = e.target.closest('[data-t]'), p = e.target.closest('[data-p]'); if (t) st.tpl = t.dataset.t; if (p) st.paper = p.dataset.p; if (t || p) draw(); });
-  return { el, get: () => ({ ...st }) };
+  el.addEventListener('click', e => {
+    const t = e.target.closest('[data-t]'), pp = e.target.closest('[data-p]'), sp = e.target.closest('[data-sp]'), ik = e.target.closest('[data-ink]');
+    if (t) st.tpl = t.dataset.t; if (pp) st.paper = pp.dataset.p; if (ik) st.ink = ik.dataset.ink;
+    if (sp) st.spacing[st.tpl] = +sp.dataset.sp;
+    if (t || pp || sp || ik) draw();
+  });
+  el.addEventListener('input', e => {
+    if (!e.target.matches('[data-sprange]')) return;
+    const v = +e.target.value; st.spacing[st.tpl] = v;
+    $('.pp-slider output', el).textContent = (v / 96 * 25.4).toFixed(1) + ' mm';
+    $$('[data-sp]', el).forEach(b => b.classList.toggle('on', +b.dataset.sp === v));
+    preview();
+  });
+  return { el, get: () => ({ tpl: st.tpl, paper: st.paper, ink: st.ink, spacingAll: { ...st.spacing }, spacing: SPACING[st.tpl] ? st.spacing[st.tpl] : null }) };
 }
+function rememberStyle(r) { SET.template = r.tpl; SET.paper = r.paper; SET.ink = r.ink; SET.spacing = { ...SET.spacing, ...r.spacingAll }; saveSettings(); }
 
 /* =====================================================================
    LIBRARY
@@ -596,14 +669,18 @@ function renderLib() {
 function bindLibrary() {
   $('#btn-settings').innerHTML = icon('gear');
   $('#btn-new-folder').innerHTML = icon('folderplus') + '<span>New Folder</span>';
-  $('#btn-import').innerHTML = icon('import') + '<span>Import PDF</span>';
+  $('#btn-import').innerHTML = icon('import') + '<span>Import</span>';
   $('#btn-new-note').innerHTML = icon('plus') + '<span>New Note</span>';
   $('#sort').value = SET.sort;
   $('#sort').addEventListener('change', e => { SET.sort = e.target.value; saveSettings(); renderLib(); });
   $('#search').addEventListener('input', e => { L.q = e.target.value.trim(); renderLib(); });
   $('#btn-new-folder').addEventListener('click', () => newFolderDialog());
   $('#btn-new-note').addEventListener('click', () => newNoteDialog());
-  $('#btn-import').addEventListener('click', () => importToNewNote());
+  $('#btn-import').setAttribute('data-popanchor', '');
+  $('#btn-import').addEventListener('click', e => menu(e.currentTarget, [
+    { label: 'Choose from Files…', icon: 'import', fn: importToNewNote },
+    { label: 'Paste image or PDF', icon: 'copy', fn: pasteFromClipboard },
+  ]));
   $('#btn-settings').addEventListener('click', () => settingsDialog());
   $('#crumbs').addEventListener('click', e => { const b = e.target.closest('[data-crumb]'); if (!b) return; if (L.q) { L.q = ''; $('#search').value = ''; } L.cwd = b.dataset.crumb || null; renderLib(); });
   $('#grid').addEventListener('click', e => {
@@ -680,18 +757,18 @@ function noteMenu(anchor, nid) {
   ], { alignRight: true });
 }
 
-function newPage(template, paper, w = PAGE_W, h = PAGE_H) { return { id: uid(), template: template || 'lined', paper: paper || 'white', bg: null, w, h, strokes: [], texts: [] }; }
+function newPage(template, paper, w = PAGE_W, h = PAGE_H, style = {}) { const t = template || 'lined'; return { id: uid(), template: t, paper: paper || 'white', spacing: style.spacing || (SET.spacing && SET.spacing[t]) || null, ink: style.ink || SET.ink || 'normal', bg: null, w, h, strokes: [], texts: [] }; }
 
-async function createNote({ title, template, paper, pages, blobs }) {
+async function createNote({ title, template, paper, pages, blobs, spacing, ink }) {
   const t = now();
-  const meta = { id: uid(), title: title || 'Untitled', folderId: L.cwd, created: t, updated: t, template, paper, blobs: blobs || [], thumb: null };
-  await DB.put('pages', { id: meta.id, pages: pages || [newPage(template, paper)] });
+  const meta = { id: uid(), title: title || 'Untitled', folderId: L.cwd, created: t, updated: t, template, paper, spacing, ink, blobs: blobs || [], thumb: null };
+  await DB.put('pages', { id: meta.id, pages: pages || [newPage(template, paper, PAGE_W, PAGE_H, { spacing, ink })] });
   await DB.put('notes', meta);
   return meta;
 }
 
 async function newNoteDialog() {
-  const pp = paperPicker(SET.template, SET.paper);
+  const pp = paperPicker({ tpl: SET.template, paper: SET.paper, ink: SET.ink, spacing: SET.spacing });
   const body = document.createElement('div');
   body.innerHTML = `<label class="lbl">Title</label><input class="inp" type="text" placeholder="Untitled" autocomplete="off">`;
   body.appendChild(pp.el);
@@ -701,8 +778,8 @@ async function newNoteDialog() {
     onOpen: b => $('.inp', b).focus(),
   });
   if (!r) return;
-  SET.template = r.tpl; SET.paper = r.paper; saveSettings();
-  const meta = await createNote({ title: r.title || defaultTitle(), template: r.tpl, paper: r.paper });
+  rememberStyle(r);
+  const meta = await createNote({ title: r.title || defaultTitle(), template: r.tpl, paper: r.paper, spacing: r.spacing, ink: r.ink });
   await refreshLib();
   openNote(meta.id);
 }
@@ -730,16 +807,135 @@ async function duplicateNote(id) {
 }
 
 async function importToNewNote() {
-  const file = await pickFile($('#file-pdf')); if (!file) return;
-  const pg = progressBox('Importing');
+  const files = await pickFiles($('#file-pdf')); if (!files.length) return;
+  ingestFiles(files);
+}
+
+/* ---------- getting files in: picker, drag & drop, paste, share target ---------- */
+const isImportable = f => !!f && (f.type === 'application/pdf' || /^image\//.test(f.type) || /\.(pdf|png|jpe?g|gif|webp|heic|heif)$/i.test(f.name || ''));
+const stripExt = n => (n || 'Imported').replace(/\.(pdf|png|jpe?g|heic|heif|webp|gif)$/i, '') || 'Imported';
+const folderLabel = id => id ? ((folderById(id) || {}).name || 'All Notes') : 'All Notes';
+function chooseDestination(files) {
+  const what = files.length === 1 ? `“${files[0].name || 'file'}”` : `${files.length} files`;
+  const notes = L.notes.slice().sort((a, b) => b.updated - a.updated);
+  const body = document.createElement('div');
+  body.innerHTML = `<button class="dest-new" data-new>${icon('plus')}<span><b>New note</b><small>in ${esc(folderLabel(L.cwd))}</small></span></button>
+    <label class="lbl">Or add pages to an existing note</label>
+    <input class="inp dest-q" type="search" placeholder="Search notes" autocomplete="off">
+    <div class="dest-list"></div>`;
+  let q = '';
+  const draw = () => {
+    const list = notes.filter(n => !q || (n.title || '').toLowerCase().includes(q));
+    $('.dest-list', body).innerHTML = list.length ? list.map(n => `<button class="dest-row" data-id="${n.id}">${n.thumb ? `<img src="${n.thumb}" alt="">` : `<span class="pv pv-${n.template || 'lined'}"></span>`}<span class="dm"><b>${esc(n.title || 'Untitled')}</b><small>${esc(folderLabel(n.folderId))} · ${fmtDate(n.updated)}</small></span><span class="dest-add">Add</span></button>`).join('')
+      : `<div class="muted" style="padding:14px">No matching notes</div>`;
+  };
+  draw();
+  return modal({ title: `Add ${what}`, body, wide: true, buttons: [{ label: 'Cancel', value: null }], onOpen: (b, close) => {
+    $('.dest-q', b).addEventListener('input', e => { q = e.target.value.trim().toLowerCase(); draw(); });
+    b.addEventListener('click', e => {
+      if (e.target.closest('[data-new]')) close({ mode: 'new' });
+      const r = e.target.closest('.dest-row'); if (r) close({ mode: 'existing', id: r.dataset.id });
+    });
+  } });
+}
+let ingesting = false;
+async function ingestFiles(fileList, opts = {}) {
+  const files = [...fileList].filter(isImportable);
+  if (!files.length) { toast('Margin can import PDFs and images'); return; }
+  if (ingesting) return; ingesting = true;
   try {
-    const pages = await fileToPages(file, (i, n) => pg.set(`Page ${i} of ${n}`, i / n));
-    pg.close();
+    let dest = opts.dest;
+    if (!dest) {
+      L.notes = await DB.all('notes'); L.folders = await DB.all('folders');
+      dest = L.notes.length ? await chooseDestination(files) : { mode: 'new' };
+    }
+    if (!dest) return;
+    const intoOpen = E.open && (dest.mode === 'open' || (dest.mode === 'existing' && E.note && E.note.id === dest.id));
+    const pg = progressBox(intoOpen || dest.mode === 'existing' ? 'Adding pages' : 'Importing');
+    let pages = [];
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i], pre = files.length > 1 ? `File ${i + 1} of ${files.length} · ` : '';
+        pages = pages.concat(await fileToPages(f, (a, n) => pg.set(`${pre}page ${a} of ${n}`, (i + a / n) / files.length)));
+      }
+    } finally { pg.close(); }
     if (!pages.length) return;
-    const meta = await createNote({ title: file.name.replace(/\.(pdf|png|jpe?g|heic|webp|gif)$/i, ''), template: SET.template, paper: SET.paper, pages, blobs: pages.map(p => p.bg).filter(Boolean) });
-    await refreshLib();
-    openNote(meta.id);
-  } catch (e) { pg.close(); console.error(e); modal({ title: 'Couldn’t import', body: `<p>${esc(importErrorText(e))}</p>`, buttons: [{ label: 'OK', primary: true, value: true }] }); }
+    const blobs = pages.map(p => p.bg).filter(Boolean);
+    const plural = `${pages.length} page${pages.length === 1 ? '' : 's'}`;
+    if (intoOpen) { await insertIntoOpen(pages); toast(`Added ${plural}`); return; }
+    if (E.open) await closeNote();
+    if (dest.mode === 'new') {
+      const meta = await createNote({ title: stripExt(files[0].name), template: SET.template, paper: SET.paper, pages, blobs });
+      await refreshLib(); await openNote(meta.id); toast(`Created “${meta.title}”`);
+    } else {
+      const meta = await DB.get('notes', dest.id), rec = await DB.get('pages', dest.id);
+      if (!meta) { toast('That note no longer exists'); return; }
+      const existing = (rec && rec.pages) || [], at = existing.length;
+      await DB.put('pages', { id: meta.id, pages: existing.concat(pages) });
+      meta.blobs = [...(meta.blobs || []), ...blobs]; meta.updated = now(); await DB.put('notes', meta);
+      await refreshLib(); await openNote(meta.id); scrollToPage(at);
+      toast(`Added ${plural} to “${meta.title}”`);
+    }
+  } catch (e) {
+    console.error(e);
+    modal({ title: 'Couldn’t import', body: `<p>${esc(importErrorText(e))}</p>`, buttons: [{ label: 'OK', primary: true, value: true }] });
+  } finally { ingesting = false; }
+}
+async function insertIntoOpen(pages) {
+  commitActiveText(); clearSelection();
+  E.note.blobs = [...(E.note.blobs || []), ...pages.map(p => p.bg).filter(Boolean)];
+  const at = Math.min(E.cur + 1, E.pages.length);
+  const before = E.pages.slice(); E.pages.splice(at, 0, ...pages);
+  pushUndo({ k: 'pages', before, after: E.pages.slice() }); syncViews(); await saveNote(); scrollToPage(at);
+}
+async function pasteFromClipboard() {
+  try {
+    const items = await navigator.clipboard.read(); const files = [];
+    for (const it of items) {
+      const t = it.types.find(x => /^image\/|application\/pdf/.test(x));
+      if (t) { const b = await it.getType(t); files.push(new File([b], t === 'application/pdf' ? 'Pasted PDF.pdf' : 'Pasted image.' + (t.split('/')[1] || 'png'), { type: t })); }
+    }
+    if (!files.length) { toast('Copy an image or PDF first, then paste'); return; }
+    ingestFiles(files, E.open ? { dest: { mode: 'open' } } : {});
+  } catch (e) { toast('Paste was blocked — try again and tap “Paste” when iOS asks'); }
+}
+function bindDropAndPaste() {
+  const ov = document.createElement('div'); ov.id = 'drop-ov'; ov.hidden = true; ov.innerHTML = '<span></span>'; document.body.appendChild(ov);
+  const hasFiles = e => !!e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+  let depth = 0, hoverCard = null;
+  const setHover = c => { if (hoverCard === c) return; if (hoverCard) hoverCard.classList.remove('drop-hover'); hoverCard = c; if (c) c.classList.add('drop-hover'); label(); };
+  const label = () => { $('span', ov).textContent = E.open ? 'Drop to add pages here' : hoverCard ? `Drop to add to “${$('.tname', hoverCard).textContent}”` : 'Drop to import — choose a new or existing note'; };
+  const hide = () => { depth = 0; ov.hidden = true; setHover(null); };
+  document.addEventListener('dragenter', e => { if (!hasFiles(e)) return; e.preventDefault(); depth++; ov.hidden = false; label(); });
+  document.addEventListener('dragover', e => {
+    if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy';
+    setHover(!E.open && e.target.closest ? e.target.closest('.tile.note') : null);
+  });
+  document.addEventListener('dragleave', e => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (!depth) hide(); });
+  document.addEventListener('drop', e => {
+    if (!hasFiles(e)) return; e.preventDefault();
+    const card = !E.open && e.target.closest ? e.target.closest('.tile.note') : null;
+    const files = [...e.dataTransfer.files]; hide();
+    ingestFiles(files, E.open ? { dest: { mode: 'open' } } : card ? { dest: { mode: 'existing', id: card.dataset.nid } } : {});
+  });
+  document.addEventListener('paste', e => {
+    if (e.target.closest && e.target.closest('input, textarea, [contenteditable]:not([contenteditable="false"])')) return;
+    const files = [...((e.clipboardData && e.clipboardData.files) || [])].filter(isImportable);
+    if (!files.length) return;
+    e.preventDefault(); ingestFiles(files, E.open ? { dest: { mode: 'open' } } : {});
+  });
+}
+async function receiveSharedFiles() {
+  const params = new URLSearchParams(location.search);
+  if (!params.has('shared')) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const c = await caches.open('margin-share');
+    const keys = (await c.keys()).sort((a, b) => a.url.localeCompare(b.url, undefined, { numeric: true }));
+    const files = [];
+    for (const k of keys) { const r = await c.match(k); const b = await r.blob(); files.push(new File([b], decodeURIComponent(r.headers.get('x-name') || 'Shared file'), { type: b.type })); await c.delete(k); }
+    if (files.length) ingestFiles(files);
+  } catch (e) { console.error(e); }
 }
 function importErrorText(e) {
   const m = String(e && (e.message || e.name) || e);
@@ -804,21 +1000,24 @@ async function fileToPages(file, onProgress) {
 function drawPaper(ctx, p) {
   ctx.fillStyle = (PAPERS[p.paper] || PAPERS.white)[0];
   ctx.fillRect(0, 0, p.w, p.h);
-  if (p.bg || p.template === 'blank') return;
+  if (p.bg || p.template === 'blank' || !SPACING[p.template]) return;
+  const g = spacingOf(p), m = (INKS[p.ink] || INKS.normal)[0];
+  const a = v => Math.min(1, v * m).toFixed(3);
   ctx.save();
   if (p.template === 'lined') {
-    ctx.strokeStyle = 'rgba(70,120,190,.30)'; ctx.lineWidth = 1; ctx.beginPath();
-    for (let y = 112; y < p.h - 20; y += 32) { ctx.moveTo(0, y); ctx.lineTo(p.w, y); }
+    ctx.strokeStyle = `rgba(70,120,190,${a(.30)})`; ctx.lineWidth = m > 1.5 ? 1.3 : 1; ctx.beginPath();
+    for (let y = 80 + g; y < p.h - 16; y += g) { ctx.moveTo(0, y); ctx.lineTo(p.w, y); }
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(214,80,80,.32)'; ctx.beginPath(); ctx.moveTo(96, 0); ctx.lineTo(96, p.h); ctx.stroke();
+    ctx.strokeStyle = `rgba(214,80,80,${a(.32)})`; ctx.beginPath(); ctx.moveTo(96, 0); ctx.lineTo(96, p.h); ctx.stroke();
   } else if (p.template === 'grid') {
-    const g = 24; ctx.strokeStyle = 'rgba(60,90,130,.17)'; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.strokeStyle = `rgba(60,90,130,${a(.17)})`; ctx.lineWidth = m > 1.5 ? 1.2 : 1; ctx.beginPath();
     for (let x = g; x < p.w; x += g) { ctx.moveTo(x, 0); ctx.lineTo(x, p.h); }
     for (let y = g; y < p.h; y += g) { ctx.moveTo(0, y); ctx.lineTo(p.w, y); }
     ctx.stroke();
   } else if (p.template === 'dotted') {
-    const g = 24; ctx.fillStyle = 'rgba(60,70,90,.36)'; ctx.beginPath();
-    for (let y = g; y < p.h; y += g) for (let x = g; x < p.w; x += g) { ctx.moveTo(x + 1.25, y); ctx.arc(x, y, 1.25, 0, 6.2832); }
+    const r = clamp(g / 19, 0.9, 1.9) * (m > 1.5 ? 1.2 : 1);
+    ctx.fillStyle = `rgba(60,70,90,${a(.36)})`; ctx.beginPath();
+    for (let y = g; y < p.h; y += g) for (let x = g; x < p.w; x += g) { ctx.moveTo(x + r, y); ctx.arc(x, y, r, 0, 6.2832); }
     ctx.fill();
   }
   ctx.restore();
@@ -946,8 +1145,8 @@ const E = {
 const sc = () => $('#scroller');
 const live = document.createElement('canvas'); live.className = 'live';
 
-function snap(p) { return { strokes: p.strokes, texts: (p.texts || []).map(t => ({ ...t })), template: p.template, paper: p.paper }; }
-function restoreSnap(p, s) { p.strokes = s.strokes; p.texts = s.texts.map(t => ({ ...t })); p.template = s.template; p.paper = s.paper; }
+function snap(p) { return { strokes: p.strokes, texts: (p.texts || []).map(t => ({ ...t })), template: p.template, paper: p.paper, spacing: p.spacing, ink: p.ink }; }
+function restoreSnap(p, s) { p.strokes = s.strokes; p.texts = s.texts.map(t => ({ ...t })); p.template = s.template; p.paper = s.paper; p.spacing = s.spacing; p.ink = s.ink; }
 function pushUndo(en) { E.undo.push(en); if (E.undo.length > 300) E.undo.shift(); E.redo = []; updUndo(); markDirty(); }
 function updUndo() { $('#ed-undo').disabled = !E.undo.length; $('#ed-redo').disabled = !E.redo.length; }
 function applyEntry(en, which) {
@@ -1211,6 +1410,7 @@ function editorMenu(anchor) {
   menu(anchor, [
     { label: 'Page style…', icon: 'page', fn: pageStyleDialog },
     { label: 'Insert PDF or image…', icon: 'import', fn: insertFile },
+    { label: 'Paste image or PDF', icon: 'copy', fn: pasteFromClipboard },
     { label: 'Duplicate page', icon: 'dup', fn: duplicatePage },
     { label: 'Delete page', icon: 'trash', danger: true, fn: deletePage },
     '-',
@@ -1226,7 +1426,7 @@ function addPage() {
   const cur = E.pages[E.cur];
   const tpl = cur && !cur.bg ? cur.template : (E.note.template || SET.template);
   const paper = cur && !cur.bg ? cur.paper : (E.note.paper || SET.paper);
-  const np = newPage(tpl, paper);
+  const np = newPage(tpl, paper, PAGE_W, PAGE_H, cur && !cur.bg ? { spacing: cur.spacing, ink: cur.ink } : { spacing: E.note.spacing, ink: E.note.ink });
   const before = E.pages.slice();
   E.pages.splice(E.cur + 1, 0, np);
   pushUndo({ k: 'pages', before, after: E.pages.slice() });
@@ -1248,35 +1448,29 @@ async function deletePage() {
 }
 async function pageStyleDialog() {
   const cur = E.pages[E.cur];
-  const pp = paperPicker(cur && !cur.bg ? cur.template : (E.note.template || 'lined'), cur ? cur.paper : 'white');
+  const base = cur && !cur.bg ? cur : { template: E.note.template || SET.template, paper: cur ? cur.paper : 'white', spacing: E.note.spacing, ink: E.note.ink };
+  const sp = { ...SET.spacing }; if (base.spacing && SPACING[base.template]) sp[base.template] = base.spacing;
+  const pp = paperPicker({ tpl: base.template, paper: base.paper, ink: base.ink || 'normal', spacing: sp });
   const body = document.createElement('div'); body.appendChild(pp.el);
-  const note = document.createElement('p'); note.className = 'muted'; note.style.marginTop = '14px';
-  note.textContent = 'Imported PDF pages keep their content; only paper colour changes behind transparent areas.';
-  if (E.pages.some(p => p.bg)) body.appendChild(note);
+  if (E.pages.some(p => p.bg)) { const n = document.createElement('p'); n.className = 'muted'; n.style.marginTop = '14px'; n.textContent = 'Imported PDF pages keep their own content.'; body.appendChild(n); }
   const r = await modal({ title: 'Page style', body, wide: true, buttons: [{ label: 'Cancel', value: null }, { label: 'This page', value: () => ({ ...pp.get(), all: false }) }, { label: 'All pages', primary: true, value: () => ({ ...pp.get(), all: true }) }] });
   if (!r) return;
   const targets = r.all ? E.pages : [cur];
   const list = [];
   for (const p of targets) {
     const before = snap(p);
-    if (!p.bg) p.template = r.tpl;
+    if (!p.bg) { p.template = r.tpl; p.spacing = r.spacing; p.ink = r.ink; }
     p.paper = r.paper;
     list.push({ k: 'page', id: p.id, before, after: snap(p) });
     const v = E.views.get(p.id); if (v) { sizeView(v); if (v.canvas) renderPage(v); }
   }
-  if (r.all) { E.note.template = r.tpl; E.note.paper = r.paper; }
+  if (r.all) { E.note.template = r.tpl; E.note.paper = r.paper; E.note.spacing = r.spacing; E.note.ink = r.ink; }
+  rememberStyle(r);
   pushUndo({ k: 'multi', list });
 }
 async function insertFile() {
-  const file = await pickFile($('#file-pdf')); if (!file) return;
-  const pg = progressBox('Inserting');
-  try {
-    const pages = await fileToPages(file, (i, n) => pg.set(`Page ${i} of ${n}`, i / n));
-    pg.close(); if (!pages.length) return;
-    E.note.blobs = [...(E.note.blobs || []), ...pages.map(p => p.bg).filter(Boolean)];
-    const before = E.pages.slice(); E.pages.splice(E.cur + 1, 0, ...pages);
-    pushUndo({ k: 'pages', before, after: E.pages.slice() }); syncViews(); await saveNote(); scrollToPage(E.cur + 1);
-  } catch (e) { pg.close(); console.error(e); modal({ title: 'Couldn’t insert', body: `<p>${esc(importErrorText(e))}</p>`, buttons: [{ label: 'OK', primary: true, value: true }] }); }
+  const files = await pickFiles($('#file-pdf')); if (!files.length) return;
+  ingestFiles(files, { dest: { mode: 'open' } });
 }
 
 /* =====================================================================
@@ -1870,9 +2064,10 @@ function closeAllModals() { $$('.modal-back').forEach(m => m.remove()); }
    ===================================================================== */
 async function boot() {
   const ok = await DB.open();
-  bindLibrary(); bindEditor();
+  bindLibrary(); bindEditor(); bindDropAndPaste();
   await refreshLib();
   if (!ok) toast('This browser blocked storage — notes won’t be saved', 5000);
+  await receiveSharedFiles();
   const m = location.hash.match(/^#note-(.+)$/);
   if (m) { const n = L.notes.find(x => x.id.replace(/[^A-Za-z0-9-]/g, '') === m[1]); if (n) openNote(n.id); }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNote(); });
@@ -1880,7 +2075,7 @@ async function boot() {
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
-  window.__margin = { E, L, DB, SET, openNote, closeNote, setTool, exportPdf, buildPdf, fileToPages };
+  window.__margin = { E, L, DB, SET, openNote, closeNote, setTool, exportPdf, buildPdf, fileToPages, ingestFiles };
 }
 boot();
 })();

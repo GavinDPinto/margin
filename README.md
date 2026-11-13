@@ -2,7 +2,7 @@
 
 A free, self-hosted note-taking web app. Your notes are stored only on your device, in the browser's storage. There's no account and no cloud.
 
-**Features:** folders and subfolders · lined / grid / dotted / blank paper in 4 colours · fountain pen (pressure-sensitive) and ballpoint · highlighter (sits under ink) · precise or whole-stroke eraser · lasso to select, move, recolour, duplicate or delete · typed text boxes · import PDFs and images to annotate · export any note as a PDF · undo/redo · pinch-zoom · palm rejection · backup & restore.
+**Features:** folders and subfolders · lined / grid / dotted / blank paper with adjustable spacing, line strength and 4 colours · fountain pen (pressure-sensitive) and ballpoint · highlighter (sits under ink) · precise or whole-stroke eraser · lasso to select, move, recolour, duplicate or delete · typed text boxes · import PDFs and images to annotate · export any note as a PDF · undo/redo · pinch-zoom · palm rejection · backup & restore.
 
 ## Files
 ```
@@ -49,8 +49,18 @@ Limits of plain `http://`: the app won't open when your computer is off, and off
 - Tap the active pen or highlighter again for more colours. The rainbow swatch picks any custom colour. The slider button sets an exact size.
 - **Lasso:** circle ink or text, then drag inside the dashed box to move it. The black bar offers Colour, Duplicate and Delete.
 - **Text:** pick the T tool and tap the page. The colour and size buttons style it.
-- **⋯ menu:** page style (template and paper for this page or all pages), insert a PDF or image, duplicate or delete a page, fit to width, export as PDF.
+- **⋯ menu:** page style (template, line spacing / square size / dot spacing, line strength and paper colour, for this page or all pages, with a live preview), insert a PDF or image, duplicate or delete a page, fit to width, export as PDF.
 - Keyboard (Magic Keyboard / Mac): P H E L T switch tools, ⌘Z / ⇧⌘Z undo/redo, ⌘+ / ⌘− / ⌘0 zoom, Delete removes a selection.
+
+## Getting PDFs and images in
+iPadOS doesn't let web apps appear in the Share sheet (only native apps can). Margin offers these instead:
+- **Import → Choose from Files…**: pick one or more PDFs or images. Margin asks whether to make a **new note** or **add the pages to an existing note**.
+- **Drag and drop:** open Files, Mail, Photos or Safari next to Margin (Split View, Slide Over or Stage Manager) and drag a PDF or image across.
+  - Dropped on the library, Margin asks new or existing.
+  - Dropped on a note's thumbnail, it goes straight into that note.
+  - Dropped inside an open note, it's added after the current page.
+- **Paste:** copy an image (or a PDF, where the app allows it), then use **Import → Paste** or **⋯ → Paste image or PDF** in a note. With a keyboard, ⌘V works too.
+- **Android / desktop Chrome:** once installed, Margin *does* appear in the Share sheet and asks new or existing.
 
 ## Back up your notes
 Settings (gear) → **Export** saves everything in one `.json` file. Save it to Files or iCloud Drive. **Import** restores it, even on another device.
