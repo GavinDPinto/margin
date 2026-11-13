@@ -137,7 +137,7 @@ canvas.live{z-index:1}
   -webkit-user-select:text;user-select:text;font-family:var(--font);border-radius:3px;cursor:text}
 .tool-text .tbox{box-shadow:0 0 0 1px rgba(45,91,227,.22)}
 .tbox:focus{box-shadow:0 0 0 1.5px var(--accent)!important;background:rgba(255,255,255,.55)}
-.sel-bar{position:absolute;z-index:5;display:flex;gap:2px;padding:4px;border-radius:12px;background:#1f1f21;color:#fff;
+.sel-bar{position:absolute;z-index:5;display:flex;flex-wrap:wrap;justify-content:center;max-width:min(600px,calc(100vw - 24px));gap:2px;padding:4px;border-radius:12px;background:#1f1f21;color:#fff;
   box-shadow:0 6px 20px rgba(0,0,0,.25);transform:translate(-50%,calc(-100% - 10px));white-space:nowrap}
 .sel-bar.below{transform:translate(-50%,10px)}
 .sel-bar button{height:34px;padding:0 11px;border-radius:8px;font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:6px}
@@ -321,6 +321,7 @@ canvas.live{z-index:1}
    Margin — a local-first handwritten notes app
    ===================================================================== */
 
+const APP_VERSION = '4 · lasso copy/cut/paste, images, crop';
 const PAGE_W = 816, PAGE_H = 1056;          // page units (Letter @ 96dpi)
 const HL_ALPHA = 0.36;
 const MAX_CANVAS_PX = 9.5e6;                // per-canvas pixel cap (iOS safe)
@@ -1338,6 +1339,7 @@ async function closeNote() {
   $('#editor').hidden = true; $('#library').hidden = false;
   history.replaceState(null, '', location.pathname + location.search);
   await refreshLib();
+  if (window.__marginUpdateReady) location.reload();
 }
 
 /* ---------- toolbar ---------- */
@@ -2294,7 +2296,7 @@ async function settingsDialog() {
       <div class="switch-row"><div><div class="t">Draw with finger</div><div class="d">Off: Pencil draws, fingers scroll &amp; pinch. Turns off automatically when a Pencil is used.</div></div><button class="switch ${SET.fingerDraw ? 'on' : ''}" data-s="finger" aria-label="Draw with finger"></button></div>
       <div class="switch-row"><div><div class="t">Back up everything</div><div class="d">Save all folders, notes and PDFs to one file.</div></div><button class="btn" data-s="export">${icon('download')}Export</button></div>
       <div class="switch-row"><div><div class="t">Restore a backup</div><div class="d">Adds notes from a backup file.</div></div><button class="btn" data-s="import">${icon('upload')}Import</button></div>
-      <p class="muted" style="margin-top:12px">${DB.mem ? '<b style="color:var(--danger)">Storage is unavailable in this browser — notes will be lost when the page closes.</b><br>' : ''}${est ? est + '. ' : ''}Notes live only in this browser on this device. On iPad, add Margin to your Home Screen and export a backup now and then.</p>`;
+      <p class="muted" style="margin-top:12px">${DB.mem ? '<b style="color:var(--danger)">Storage is unavailable in this browser — notes will be lost when the page closes.</b><br>' : ''}${est ? est + '. ' : ''}Margin version ${APP_VERSION}.<br>Notes live only in this browser on this device. On iPad, add Margin to your Home Screen and export a backup now and then.</p>`;
   };
   draw();
   body.addEventListener('click', async e => {
@@ -2350,7 +2352,15 @@ async function boot() {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNote(); });
   window.addEventListener('pagehide', () => saveNote());
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').then(reg => { reg.update().catch(() => {}); }).catch(() => {});
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloading) return;
+      if (!E.open) { reloading = true; location.reload(); return; }
+      window.__marginUpdateReady = true; toast('Margin was updated — go back to your notes to load it', 5000);
+    });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {}); });
   }
   window.__margin = { E, L, DB, SET, openNote, closeNote, setTool, exportPdf, buildPdf, fileToPages, ingestFiles };
 }
