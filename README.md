@@ -47,7 +47,9 @@ Limits of plain `http://`: the app won't open when your computer is off, and off
 ## Using it
 - **Pencil draws, fingers scroll.** One finger scrolls (with momentum). Two fingers pinch-zoom. If your palm scrolls the page as the Pencil lands, the scroll is undone. No Pencil? Turn on *Draw with finger* in ⋯ or Settings.
 - Tap the active pen or highlighter again for more colours. The rainbow swatch picks any custom colour. The slider button sets an exact size.
-- **Lasso:** circle ink or text, then drag inside the dashed box to move it. The black bar offers Colour, Duplicate and Delete.
+- **Lasso:** circle ink, text or images, or tap an image, to select. Drag inside the dashed box to move it, and drag a corner dot to resize. The black bar offers Colour, Copy, Cut, Duplicate, Crop (images) and Delete. It works with Pencil or finger.
+- **Paste:** with the lasso, tap an empty spot and press **Paste**. You can also use **⋯ → Paste selection**, or ⌘C / ⌘X / ⌘V. Copied items can be pasted into other pages and other notes.
+- **Images:** use the picture button in the top bar, or **⋯ → Insert image…**. You can also drag or paste a photo into a note. Resize from the corners. Tap **Crop**, drag the square handles, then **Done**.
 - **Text:** pick the T tool and tap the page. The colour and size buttons style it.
 - **⋯ menu:** page style (template, line spacing / square size / dot spacing, line strength and paper colour, for this page or all pages, with a live preview), insert a PDF or image, duplicate or delete a page, fit to width, export as PDF.
 - Keyboard (Magic Keyboard / Mac): P H E L T switch tools, ⌘Z / ⇧⌘Z undo/redo, ⌘+ / ⌘− / ⌘0 zoom, Delete removes a selection.
