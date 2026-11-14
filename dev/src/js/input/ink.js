@@ -56,8 +56,12 @@ export function commitInk() {
   if (st.t !== 'hl' && SET.scribble && !D.shape && isScribble(st.p)) {   // scribble over ink -> erase what's under it
     const hit = scribbleTargets(p, st.p);
     if (hit.size) {
-      p.strokes = p.strokes.filter(x => !hit.has(x.id));
-      pushUndo({ k: 'page', id: p.id, before: D.before, after: snap(p) });
+      // two undo steps: first Undo brings back the ink with the scribble still drawn over it, the next removes the scribble
+      p.strokes = p.strokes.concat(st);
+      const drawn = snap(p);
+      pushUndo({ k: 'page', id: p.id, before: D.before, after: drawn });
+      p.strokes = p.strokes.filter(x => !hit.has(x.id) && x.id !== st.id);
+      pushUndo({ k: 'page', id: p.id, before: drawn, after: snap(p) });
       clearLive(); renderPage(v); toast('Scribbled out — tap Undo to bring it back', 1800);
       return;
     }

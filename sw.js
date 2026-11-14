@@ -1,5 +1,5 @@
 // Margin service worker. Bump VERSION when you update the app files.
-const VERSION = 'margin-v17';
+const VERSION = 'margin-v18';
 const SHARE = 'margin-share';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './lib/pdf.min.mjs', './lib/pdf.worker.min.mjs'];
 

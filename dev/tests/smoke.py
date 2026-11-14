@@ -271,15 +271,31 @@ async def main():
             await drag(page, 'pen', 7, zigzag(sx - 10, sy - 18, 220, 36))
             left = await J(page, f"__margin.E.pages[__margin.E.cur].strokes.slice({n0}).map(s=>s.p.length/3)")
             check('scribble erases the word under it, not the line mostly outside it', len(left) == 1 and left[0] <= 5, str(left))
-            await page.click('#ed-undo'); check('undo brings scribbled ink back', await strokes(page) == n0 + 2)
+            await page.click('#ed-undo'); check('undo brings scribbled ink back with the scribble on top', await strokes(page) == n0 + 3)
+            await page.click('#ed-undo'); check('second undo removes the scribble', await strokes(page) == n0 + 2)
+            await page.click('#ed-redo'); await page.click('#ed-redo'); check('redo scribbles it out again', await strokes(page) == n0 + 1)
+            await page.click('#ed-undo'); await page.click('#ed-undo'); check('undo twice back to the word and line', await strokes(page) == n0 + 2)
             await drag(page, 'pen', 7, zigzag(sx, sy + 140, 200, 30))
             check('scribble on empty paper stays as ink', await strokes(page) == n0 + 3)
             await drag(page, 'pen', 7, [[sx + 100, sy + 240]])                       # a small dot
             await drag(page, 'pen', 7, zigzag(sx, sy + 225, 200, 30))                 # zig-zag letters written over it
             check('zig-zag writing over a stray dot keeps both', await strokes(page) == n0 + 5)
+            # a word with an i dot and an apostrophe above the scribble and a fast two-point letter poking out: all of it goes
+            wy, m0 = sy + 330, await strokes(page)
+            await drag(page, 'pen', 7, wave(sx, wy, 200))
+            await drag(page, 'pen', 7, [[sx + 60, wy - 30]])                                   # i dot, just above the scribble
+            await drag(page, 'pen', 7, [[sx + 150, wy - 32], [sx + 151, wy - 26]])            # apostrophe
+            await drag(page, 'pen', 7, [[sx + 110, wy - 24], [sx + 110, wy + 22]])            # a fast l: few points, mostly covered
+            await drag(page, 'pen', 7, [[sx + 60, wy - 110]])                                  # a dot well away from the word stays
+            check('word and marks drawn', await strokes(page) == m0 + 5)
+            await drag(page, 'pen', 7, zigzag(sx - 10, wy - 18, 220, 36))
+            check('scribble also erases i dots, apostrophes and partly covered letters', await strokes(page) == m0 + 1,
+                  str(await J(page, f"__margin.E.pages[__margin.E.cur].strokes.slice({m0}).map(s=>s.p.length/3)")))
+            await page.click('#ed-undo'); check('undo brings the whole word back', await strokes(page) == m0 + 6)
+            await page.click('#ed-undo'); check('second undo removes that scribble', await strokes(page) == m0 + 5)
             await page.click('#tb-opts [data-act="scribble"]'); await page.wait_for_timeout(100)
             await drag(page, 'pen', 7, zigzag(sx - 10, sy - 18, 220, 36))
-            check('scribble to erase off: scribble is just ink', not await J(page, '__margin.SET.scribble') and await strokes(page) == n0 + 6)
+            check('scribble to erase off: scribble is just ink', not await J(page, '__margin.SET.scribble') and await strokes(page) == n0 + 11)
             await page.click('#tb-opts [data-act="scribble"]')
             await page.screenshot(path=str(SHOTS / 'scribble.png'))
 

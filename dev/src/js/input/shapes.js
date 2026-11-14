@@ -161,20 +161,54 @@ export function convexHull(P) {   // flat [x,y,...] polygon
   for (let i = pts.length - 1; i >= 0; i--) { const q = pts[i]; while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
   return lo.slice(0, -1).concat(up.slice(0, -1)).flat();
 }
-export function scribbleTargets(p, P) {   // ids of strokes with at least half their points inside the scribble's outline
+// share of a stroke's length (not its points: fast strokes have few, far-apart points) that lies inside polygon H
+export function coverInside(P, H) {
+  const n = P.length / 3; if (n === 1) return pointInPoly(P[0], P[1], H) ? 1 : 0;
+  let len = 0; for (let i = 3; i < P.length; i += 3) len += Math.hypot(P[i] - P[i - 3], P[i + 1] - P[i - 2]);
+  if (!len) return pointInPoly(P[0], P[1], H) ? 1 : 0;
+  const step = Math.max(1, len / 60); let inn = 0;
+  for (let i = 3; i < P.length; i += 3) {
+    const ax = P[i - 3], ay = P[i - 2], d = Math.hypot(P[i] - ax, P[i + 1] - ay), k = Math.max(1, Math.round(d / step));
+    for (let j = 0; j < k; j++) { const t = (j + 0.5) / k; if (pointInPoly(ax + (P[i] - ax) * t, ay + (P[i + 1] - ay) * t, H)) inn += d / k; }
+  }
+  return inn / len;
+}
+export function hullWidth(H) {   // narrowest width of a convex polygon
+  let w = Infinity; const m = H.length / 2;
+  for (let i = 0; i < m; i++) {
+    const ax = H[i * 2], ay = H[i * 2 + 1], bx = H[(i + 1) % m * 2], by = H[(i + 1) % m * 2 + 1], l = Math.hypot(bx - ax, by - ay); if (!l) continue;
+    let far = 0; for (let j = 0; j < m; j++) far = Math.max(far, Math.abs((bx - ax) * (H[j * 2 + 1] - ay) - (by - ay) * (H[j * 2] - ax)) / l);
+    w = Math.min(w, far);
+  }
+  return w;
+}
+export function distToPoly(x, y, H) {
+  if (pointInPoly(x, y, H)) return 0;
+  let d = Infinity; const m = H.length / 2;
+  for (let i = 0; i < m; i++) d = Math.min(d, distPtSeg(x, y, H[i * 2], H[i * 2 + 1], H[(i + 1) % m * 2], H[(i + 1) % m * 2 + 1]));
+  return d;
+}
+export function scribbleTargets(p, P) {   // ids of strokes with at least half their length inside the scribble's outline
   const H = convexHull(P), out = new Set(); if (H.length < 6) return out;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (let i = 0; i < H.length; i += 2) { x0 = Math.min(x0, H[i]); x1 = Math.max(x1, H[i]); y0 = Math.min(y0, H[i + 1]); y1 = Math.max(y1, H[i + 1]); }
   for (const st of p.strokes) {
     const b = st.bb || (st.bb = strokeBB(st));
     if (b[2] < x0 || b[0] > x1 || b[3] < y0 || b[1] > y1) continue;
-    const n = st.p.length / 3, step = Math.max(1, Math.floor(n / 40)); let inn = 0, tot = 0;
-    for (let i = 0; i < n; i += step) { tot++; if (pointInPoly(st.p[i * 3], st.p[i * 3 + 1], H)) inn++; }
-    if (tot && inn / tot >= 0.5) out.add(st.id);
+    if (coverInside(st.p, H) >= 0.5) out.add(st.id);
   }
   // the covered ink must fill a fair part of the scribble, so writing zig-zaggy letters near a stray dot doesn't erase it
   let u = [Infinity, Infinity, -Infinity, -Infinity];
   for (const st of p.strokes) if (out.has(st.id)) { const q = st.bb; u = [Math.min(u[0], q[0]), Math.min(u[1], q[1]), Math.max(u[2], q[2]), Math.max(u[3], q[3])]; }
   if (out.size && (Math.min(u[2], x1) - Math.max(u[0], x0)) * (Math.min(u[3], y1) - Math.max(u[1], y0)) < (x1 - x0) * (y1 - y0) * 0.2) out.clear();
+  if (!out.size) return out;
+  // small marks just outside the scribble belong to the word being crossed out (i dots, accents, t crosses, apostrophes, full stops)
+  const th = hullWidth(H), near = th * 0.6, small = th * 0.75;
+  for (const st of p.strokes) {
+    if (out.has(st.id)) continue;
+    const b = st.bb, pad = (st.t === 'pen' ? st.s * 1.6 : st.s) / 2 + 1, w = b[2] - b[0] - pad * 2, h = b[3] - b[1] - pad * 2;
+    if (Math.max(w, h) > small || b[2] < x0 - near || b[0] > x1 + near || b[3] < y0 - near || b[1] > y1 + near) continue;
+    if (distToPoly((b[0] + b[2]) / 2, (b[1] + b[3]) / 2, H) <= near) out.add(st.id);
+  }
   return out;
 }
