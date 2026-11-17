@@ -1456,6 +1456,43 @@ textarea.inp {
   opacity: .6;
 }
 
+/* src/css/move.css */
+.move-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0 calc(var(--sar) + 20px) 12px calc(var(--sal) + 20px);
+  padding: 12px 14px 12px 16px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  border: 1px solid #cfdcfb;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.move-banner span {
+  flex: 1;
+  min-width: 220px;
+}
+.move-steps {
+  margin: 4px 0 6px;
+  padding-left: 22px;
+}
+.move-steps li {
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.move-steps .btn {
+  margin-top: 8px;
+}
+.bring-notes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 22px;
+}
+
 /* src/css/main.css */
 
 </style>
@@ -1728,8 +1765,10 @@ textarea.inp {
   }
 
   // src/js/core/version.js
-  var APP_VERSION = "18 · better scribble to erase";
+  var APP_VERSION = "19 · moving to margin.gavinpinto.ca";
   var FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec";
+  var HOME_URL = "https://margin.gavinpinto.ca/";
+  var OLD_HOSTS = ["gavindpinto.github.io"];
 
   // src/js/ui/dialogs.js
   var toastT = 0;
@@ -2000,7 +2039,7 @@ textarea.inp {
       body.innerHTML = `
       <div class="switch-row"><div><div class="t">Draw with finger</div><div class="d">Off: Pencil draws, fingers scroll &amp; pinch. Turns off automatically when a Pencil is used.</div></div><button class="switch ${SET.fingerDraw ? "on" : ""}" data-s="finger" aria-label="Draw with finger"></button></div>
       <div class="switch-row"><div><div class="t">Back up everything</div><div class="d">Save all folders, notes and PDFs to one file.</div></div><button class="btn" data-s="export">${icon("download")}Export</button></div>
-      <div class="switch-row"><div><div class="t">Restore a backup</div><div class="d">Adds notes from a backup file.</div></div><button class="btn" data-s="import">${icon("upload")}Import</button></div>
+      <div class="switch-row"><div><div class="t">Restore a backup</div><div class="d">Adds notes from a backup file. This is also how you bring notes from the old Margin address.</div></div><button class="btn" data-s="import">${icon("upload")}Import</button></div>
       <p class="muted" style="margin-top:12px">${DB.mem ? '<b style="color:var(--danger)">Storage is unavailable in this browser — notes will be lost when the page closes.</b><br>' : ""}${est ? est + ". " : ""}Margin version ${APP_VERSION}.<br>Notes live only in this browser on this device. On iPad, add Margin to your Home Screen and export a backup now and then.</p>`;
     };
     draw();
@@ -4776,6 +4815,58 @@ ${xref}
     }
   }
 
+  // src/js/settings/move.js
+  var flag = (k) => {
+    try {
+      return localStorage.getItem(k) === "1";
+    } catch (e) {
+      return false;
+    }
+  };
+  var homeHost = () => new URL(HOME_URL).host;
+  var isOldHome = () => OLD_HOSTS.includes(location.hostname) || flag("margin.testOldHome");
+  var isNewHome = () => location.host === homeHost() || flag("margin.testNewHome");
+  async function newHomeReady() {
+    if (flag("margin.testMoveReady")) return true;
+    try {
+      const r = await fetch(HOME_URL + "manifest.webmanifest", { cache: "no-store" });
+      return r.ok && (await r.text()).includes('"Margin"');
+    } catch (e) {
+      return false;
+    }
+  }
+  async function checkMove() {
+    if (!isOldHome()) return;
+    if (await newHomeReady()) showMoveBanner();
+  }
+  function showMoveBanner() {
+    if ($("#move-banner")) return;
+    const b = document.createElement("div");
+    b.id = "move-banner";
+    b.className = "move-banner";
+    b.innerHTML = `<span>🏠 <b>Margin has a new home: ${homeHost()}</b><br>Your notes are still safe here. Move them over in a couple of taps.</span><button class="btn primary" data-move>Move my notes</button>`;
+    b.querySelector("[data-move]").addEventListener("click", moveDialog);
+    const lib = $("#library"), bar = $(".lib-bar", lib);
+    lib.insertBefore(b, bar);
+  }
+  function moveDialog() {
+    const body = document.createElement("div");
+    body.innerHTML = `<ol class="move-steps">
+      <li><b>Save your notes</b> to one backup file. When iPad asks, choose <b>Save to Files</b>.<br><button class="btn primary" data-a="save">${icon("download")}Save my notes</button></li>
+      <li><b>Open the new Margin</b> at <a href="${HOME_URL}" target="_blank" rel="noopener">${homeHost()}</a>, tap <b>Bring my notes over</b>, and pick the backup file you just saved.</li>
+      <li><b>Add the new Margin to your Home Screen</b> (Share → Add to Home Screen). Once your notes show up there, you can remove the old icon.</li>
+    </ol>
+    <p class="muted">Nothing is deleted here. Your notes stay on this old address until you remove it yourself.</p>`;
+    body.addEventListener("click", (e) => {
+      if (e.target.closest('[data-a="save"]')) exportBackup();
+    });
+    modal({ title: "Move your notes to the new Margin", body, wide: true, buttons: [{ label: "Close", value: null }] });
+  }
+  var bringNotesButton = () => `<button class="btn" data-act="bring-notes">${icon("upload")}Bring my notes over</button>`;
+  function bringNotesOver() {
+    importBackup();
+  }
+
   // src/js/library/library.js
   var L = { cwd: null, q: "", folders: [], notes: [] };
   async function refreshLib() {
@@ -4854,7 +4945,7 @@ ${xref}
       }).join("") + `</div>`;
     }
     if (!folders.length && !notes.length) {
-      h = L.q ? `<div class="empty"><div class="big">No matches</div>Nothing found for “${esc(L.q)}”.</div>` : `<div class="empty"><div class="big">${L.cwd ? "This folder is empty" : "No notes yet"}</div>Create a note, add a folder, or import a PDF to mark up.<br><button class="btn primary" data-act="new-note">${icon("plus")}New Note</button></div>`;
+      h = L.q ? `<div class="empty"><div class="big">No matches</div>Nothing found for “${esc(L.q)}”.</div>` : `<div class="empty"><div class="big">${L.cwd ? "This folder is empty" : "No notes yet"}</div>Create a note, add a folder, or import a PDF to mark up.<br><button class="btn primary" data-act="new-note">${icon("plus")}New Note</button>${!L.cwd && !L.notes.length && isNewHome() ? `<div class="bring-notes"><span class="muted">Used Margin at the old address?</span>${bringNotesButton()}</div>` : ""}</div>`;
     }
     g.innerHTML = h;
   }
@@ -4907,6 +4998,10 @@ ${xref}
       }
       if (e.target.closest('[data-act="new-note"]')) {
         newNoteDialog();
+        return;
+      }
+      if (e.target.closest('[data-act="bring-notes"]')) {
+        bringNotesOver();
         return;
       }
       const f = e.target.closest("[data-fid]");
@@ -5823,6 +5918,7 @@ ${xref}
     await refreshLib();
     if (!ok) toast("This browser blocked storage — notes won’t be saved", 5e3);
     await receiveSharedFiles();
+    checkMove();
     const m = location.hash.match(/^#note-(.+)$/);
     if (m) {
       const n = L.notes.find((x) => x.id.replace(/[^A-Za-z0-9-]/g, "") === m[1]);

@@ -1,0 +1,7 @@
+/* moving to the new address */
+.move-banner{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 calc(var(--sar) + 20px) 12px calc(var(--sal) + 20px);padding:12px 14px 12px 16px;border-radius:14px;background:var(--accent-soft);border:1px solid #cfdcfb;font-size:14px;line-height:1.45}
+.move-banner span{flex:1;min-width:220px}
+.move-steps{margin:4px 0 6px;padding-left:22px}
+.move-steps li{margin:0 0 14px;line-height:1.5}
+.move-steps .btn{margin-top:8px}
+.bring-notes{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:22px}

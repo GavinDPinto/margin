@@ -362,6 +362,23 @@ async def main():
             await page.reload(); await page.wait_for_timeout(900)
             check('data survives reload', await J(page, '[__margin.L.notes.length, __margin.L.folders.length]') == [3, 1])
             await page.screenshot(path=str(SHOTS / 'library.png'))
+
+            # ---------- moving to the new address ----------
+            await page.evaluate("localStorage.setItem('margin.testOldHome','1'); localStorage.setItem('margin.testMoveReady','1')")
+            await page.reload(); await page.wait_for_timeout(900)
+            check('old address shows move banner', await J(page, "!!document.getElementById('move-banner')"))
+            await page.click('#move-banner [data-move]'); await page.wait_for_timeout(200)
+            check('move dialog explains the steps', await J(page, "document.querySelectorAll('.move-steps li').length") == 3 and await J(page, "!!document.querySelector('.move-steps [data-a=save]')"))
+            await page.screenshot(path=str(SHOTS / 'move.png'))
+            await page.click('.modal .btn:has-text("Close")')
+            await page.evaluate("localStorage.removeItem('margin.testOldHome'); localStorage.removeItem('margin.testMoveReady')")
+            await page.reload(); await page.wait_for_timeout(700)
+            check('no move banner on the normal address', not await J(page, "!!document.getElementById('move-banner')"))
+            fresh = await (await b.new_context(viewport={'width': 1180, 'height': 820})).new_page()
+            await fresh.goto(URL); await fresh.wait_for_timeout(300)
+            await fresh.evaluate("localStorage.setItem('margin.testNewHome','1')"); await fresh.reload(); await fresh.wait_for_timeout(700)
+            check('new address offers "Bring my notes over" when empty', await fresh.evaluate("!!document.querySelector('[data-act=bring-notes]')"))
+            await fresh.close()
         except Exception as e:
             check('test run completed', False, repr(e)[:300])
         await b.close()

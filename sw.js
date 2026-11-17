@@ -1,5 +1,5 @@
 // Margin service worker. Bump VERSION when you update the app files.
-const VERSION = 'margin-v18';
+const VERSION = 'margin-v19';
 const SHARE = 'margin-share';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './apple-touch-icon.png', './lib/pdf.min.mjs', './lib/pdf.worker.min.mjs'];
 
@@ -33,7 +33,9 @@ self.addEventListener('fetch', e => {
       const cache = await caches.open(VERSION);
       try {
         const r = await fetch(req, { cache: 'no-store' });
-        if (r && r.ok) { cache.put('./index.html', r.clone()); return r; }
+        // A redirect (e.g. this old address forwarding to Margin's new home) must not replace the saved app:
+        // keep serving the copy that can still reach the notes stored on this address.
+        if (r && r.ok && !r.redirected && r.type !== 'opaqueredirect') { cache.put('./index.html', r.clone()); return r; }
       } catch (err) {}
       return (await cache.match('./index.html')) || (await cache.match('./')) || new Response('Offline', { status: 503 });
     })());

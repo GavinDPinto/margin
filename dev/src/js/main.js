@@ -10,6 +10,7 @@ import { isScribble, recognizeShape } from './input/shapes.js';
 import { bindDropAndPaste, fileToPages, ingestFiles, receiveSharedFiles } from './library/import.js';
 import { L, bindLibrary, refreshLib } from './library/library.js';
 import { toast } from './ui/dialogs.js';
+import { checkMove } from './settings/move.js';
 
 /* =====================================================================
    BOOT
@@ -20,6 +21,7 @@ async function boot() {
   await refreshLib();
   if (!ok) toast('This browser blocked storage — notes won’t be saved', 5000);
   await receiveSharedFiles();
+  checkMove();
   const m = location.hash.match(/^#note-(.+)$/);
   if (m) { const n = L.notes.find(x => x.id.replace(/[^A-Za-z0-9-]/g, '') === m[1]); if (n) openNote(n.id); }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveNote(); });

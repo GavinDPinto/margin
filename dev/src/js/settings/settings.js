@@ -21,7 +21,7 @@ export async function settingsDialog() {
     body.innerHTML = `
       <div class="switch-row"><div><div class="t">Draw with finger</div><div class="d">Off: Pencil draws, fingers scroll &amp; pinch. Turns off automatically when a Pencil is used.</div></div><button class="switch ${SET.fingerDraw ? 'on' : ''}" data-s="finger" aria-label="Draw with finger"></button></div>
       <div class="switch-row"><div><div class="t">Back up everything</div><div class="d">Save all folders, notes and PDFs to one file.</div></div><button class="btn" data-s="export">${icon('download')}Export</button></div>
-      <div class="switch-row"><div><div class="t">Restore a backup</div><div class="d">Adds notes from a backup file.</div></div><button class="btn" data-s="import">${icon('upload')}Import</button></div>
+      <div class="switch-row"><div><div class="t">Restore a backup</div><div class="d">Adds notes from a backup file. This is also how you bring notes from the old Margin address.</div></div><button class="btn" data-s="import">${icon('upload')}Import</button></div>
       <p class="muted" style="margin-top:12px">${DB.mem ? '<b style="color:var(--danger)">Storage is unavailable in this browser — notes will be lost when the page closes.</b><br>' : ''}${est ? est + '. ' : ''}Margin version ${APP_VERSION}.<br>Notes live only in this browser on this device. On iPad, add Margin to your Home Screen and export a backup now and then.</p>`;
   };
   draw();

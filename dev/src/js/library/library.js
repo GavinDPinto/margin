@@ -9,6 +9,7 @@ import { feedbackDialog } from '../feedback/feedback.js';
 import { ingestFiles, pasteFromClipboard } from '../library/import.js';
 import { settingsDialog } from '../settings/settings.js';
 import { askText, confirmBox, menu, modal, paperPicker, pickFiles, rememberStyle, toast } from '../ui/dialogs.js';
+import { bringNotesButton, bringNotesOver, isNewHome } from '../settings/move.js';
 
 /* =====================================================================
    LIBRARY
@@ -75,7 +76,7 @@ export function renderLib() {
   }
   if (!folders.length && !notes.length) {
     h = L.q ? `<div class="empty"><div class="big">No matches</div>Nothing found for “${esc(L.q)}”.</div>`
-      : `<div class="empty"><div class="big">${L.cwd ? 'This folder is empty' : 'No notes yet'}</div>Create a note, add a folder, or import a PDF to mark up.<br><button class="btn primary" data-act="new-note">${icon('plus')}New Note</button></div>`;
+      : `<div class="empty"><div class="big">${L.cwd ? 'This folder is empty' : 'No notes yet'}</div>Create a note, add a folder, or import a PDF to mark up.<br><button class="btn primary" data-act="new-note">${icon('plus')}New Note</button>${!L.cwd && !L.notes.length && isNewHome() ? `<div class="bring-notes"><span class="muted">Used Margin at the old address?</span>${bringNotesButton()}</div>` : ''}</div>`;
   }
   g.innerHTML = h;
 }
@@ -104,6 +105,7 @@ export function bindLibrary() {
     if (fm) { e.stopPropagation(); folderMenu(fm, fm.dataset.fmenu); return; }
     if (nm) { e.stopPropagation(); noteMenu(nm, nm.dataset.nmenu); return; }
     if (e.target.closest('[data-act="new-note"]')) { newNoteDialog(); return; }
+    if (e.target.closest('[data-act="bring-notes"]')) { bringNotesOver(); return; }
     const f = e.target.closest('[data-fid]'); if (f) { L.cwd = f.dataset.fid; L.q = ''; $('#search').value = ''; renderLib(); $('#grid').scrollTop = 0; return; }
     const n = e.target.closest('[data-nid]'); if (n) openNote(n.dataset.nid);
   });
