@@ -1609,6 +1609,7 @@ textarea.inp {
     tool: "pen",
     shapes: true,
     scribble: true,
+    scribbleTip: false,
     pen: { color: "#1c1c1e", size: 2.2, kind: "fountain", custom: "#8a5a2b" },
     hl: { color: "#ffe14d", size: 18, custom: "#ffc8a0" },
     eraser: { size: 26, mode: "partial" },
@@ -1765,7 +1766,7 @@ textarea.inp {
   }
 
   // src/js/core/version.js
-  var APP_VERSION = "19 · moving to margin.gavinpinto.ca";
+  var APP_VERSION = "20 · scribble tip shows once";
   var FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec";
   var HOME_URL = "https://margin.gavinpinto.ca/";
   var OLD_HOSTS = ["gavindpinto.github.io"];
@@ -3924,7 +3925,11 @@ textarea.inp {
         pushUndo({ k: "page", id: p.id, before: drawn, after: snap(p) });
         clearLive();
         renderPage(v);
-        toast("Scribbled out — tap Undo to bring it back", 1800);
+        if (!SET.scribbleTip) {
+          SET.scribbleTip = true;
+          saveSettings();
+          toast("Scribbled out — tap Undo to bring it back", 1800);
+        }
         return;
       }
     }

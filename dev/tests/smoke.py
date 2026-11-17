@@ -271,6 +271,8 @@ async def main():
             await drag(page, 'pen', 7, zigzag(sx - 10, sy - 18, 220, 36))
             left = await J(page, f"__margin.E.pages[__margin.E.cur].strokes.slice({n0}).map(s=>s.p.length/3)")
             check('scribble erases the word under it, not the line mostly outside it', len(left) == 1 and left[0] <= 5, str(left))
+            check('first scribble-out shows the Undo tip once', 'Scribbled out' in await J(page, "document.querySelector('#toast').textContent") and await J(page, '__margin.SET.scribbleTip'))
+            await J(page, "(()=>{const t=document.querySelector('#toast'); t.textContent=''; t.classList.remove('show'); return 1})()")
             await page.click('#ed-undo'); check('undo brings scribbled ink back with the scribble on top', await strokes(page) == n0 + 3)
             await page.click('#ed-undo'); check('second undo removes the scribble', await strokes(page) == n0 + 2)
             await page.click('#ed-redo'); await page.click('#ed-redo'); check('redo scribbles it out again', await strokes(page) == n0 + 1)
@@ -291,6 +293,7 @@ async def main():
             await drag(page, 'pen', 7, zigzag(sx - 10, wy - 18, 220, 36))
             check('scribble also erases i dots, apostrophes and partly covered letters', await strokes(page) == m0 + 1,
                   str(await J(page, f"__margin.E.pages[__margin.E.cur].strokes.slice({m0}).map(s=>s.p.length/3)")))
+            check('later scribble-outs don\'t show the tip again', await J(page, "(()=>{const t=document.querySelector('#toast'); return !t.textContent.includes('Scribbled out')})()"))
             await page.click('#ed-undo'); check('undo brings the whole word back', await strokes(page) == m0 + 6)
             await page.click('#ed-undo'); check('second undo removes that scribble', await strokes(page) == m0 + 5)
             await page.click('#tb-opts [data-act="scribble"]'); await page.wait_for_timeout(100)

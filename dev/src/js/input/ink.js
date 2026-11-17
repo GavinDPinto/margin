@@ -1,5 +1,5 @@
 // Pen and highlighter strokes: capture, smoothing, live drawing, commit.
-import { SET } from '../core/config.js';
+import { SET, saveSettings } from '../core/config.js';
 import { uid } from '../core/util.js';
 import { E, live, pushUndo, renderPage, snap } from '../editor/editor.js';
 import { drawSegs, drawStroke, drawTail, segW } from '../editor/render.js';
@@ -62,7 +62,9 @@ export function commitInk() {
       pushUndo({ k: 'page', id: p.id, before: D.before, after: drawn });
       p.strokes = p.strokes.filter(x => !hit.has(x.id) && x.id !== st.id);
       pushUndo({ k: 'page', id: p.id, before: drawn, after: snap(p) });
-      clearLive(); renderPage(v); toast('Scribbled out — tap Undo to bring it back', 1800);
+      clearLive(); renderPage(v);
+      // the "tap Undo" tip only appears the first time someone scribbles something out, never again after that
+      if (!SET.scribbleTip) { SET.scribbleTip = true; saveSettings(); toast('Scribbled out — tap Undo to bring it back', 1800); }
       return;
     }
   }

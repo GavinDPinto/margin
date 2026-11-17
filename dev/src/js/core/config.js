@@ -22,7 +22,7 @@ export const SIZE_RANGE = { pen: [0.5, 14, 0.1], hl: [4, 60, 1], eraser: [4, 120
 
 /* ---------- settings ---------- */
 export const DEFAULTS = {
-  fingerDraw: false, template: 'lined', paper: 'white', spacing: { lined: 32, grid: 24, dotted: 24 }, ink: 'normal', sort: 'updated', tool: 'pen', shapes: true, scribble: true,
+  fingerDraw: false, template: 'lined', paper: 'white', spacing: { lined: 32, grid: 24, dotted: 24 }, ink: 'normal', sort: 'updated', tool: 'pen', shapes: true, scribble: true, scribbleTip: false,
   pen: { color: '#1c1c1e', size: 2.2, kind: 'fountain', custom: '#8a5a2b' },
   hl: { color: '#ffe14d', size: 18, custom: '#ffc8a0' },
   eraser: { size: 26, mode: 'partial' },
