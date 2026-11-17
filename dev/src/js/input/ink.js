@@ -1,7 +1,7 @@
 // Pen and highlighter strokes: capture, smoothing, live drawing, commit.
 import { SET, saveSettings } from '../core/config.js';
 import { uid } from '../core/util.js';
-import { E, live, pushUndo, renderPage, snap } from '../editor/editor.js';
+import { E, live, paintOn, pushUndo, renderPage, snap } from '../editor/editor.js';
 import { drawSegs, drawStroke, drawTail, segW } from '../editor/render.js';
 import { D, attachLive, clearLive, pressureOf, toPage } from '../input/pointer.js';
 import { armHold, isScribble, scribbleTargets } from '../input/shapes.js';
@@ -72,5 +72,5 @@ export function commitInk() {
   pushUndo({ k: 'page', id: p.id, before: D.before, after: snap(p) });
   clearLive();
   if (st.t === 'hl') renderPage(v);
-  else if (v.canvas) { const ctx = v.canvas.getContext('2d'); ctx.setTransform(v.k, 0, 0, v.k, 0, 0); drawStroke(ctx, st); }
+  else paintOn(v, ctx => drawStroke(ctx, st));
 }

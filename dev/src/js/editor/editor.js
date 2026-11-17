@@ -5,7 +5,7 @@ import { $, MAX_CANVAS_PX, PAGE_W, clamp, dpr, now } from '../core/util.js';
 import { drawAllStrokes, drawPaper, renderPageToCanvas } from '../editor/render.js';
 import { buildTexts, commitActiveText } from '../editor/text.js';
 import { setTool } from '../editor/toolbar.js';
-import { D } from '../input/pointer.js';
+import { D, G } from '../input/pointer.js';
 import { newPage, refreshLib } from '../library/library.js';
 import { hidePasteBar } from '../selection/clipboard.js';
 import { drawCrop, drawImages, positionCropUI } from '../selection/images.js';
@@ -66,7 +66,13 @@ export function sizeView(v) {
   v.el.style.background = (PAPERS[p.paper] || PAPERS.white)[0];
   v.textLayer.style.width = p.w + 'px'; v.textLayer.style.height = p.h + 'px'; v.textLayer.style.transform = `scale(${s})`;
   if (v.canvas) { v.canvas.style.width = p.w * s + 'px'; v.canvas.style.height = p.h * s + 'px'; }
-  if (live.parentNode === v.el) { live.style.width = p.w * s + 'px'; live.style.height = p.h * s + 'px'; }
+  if (v.hi) placeLayer(v.hi, v.hr);
+  if (live.parentNode === v.el) placeLayer(live, v.lr || { x: 0, y: 0, w: p.w, h: p.h });
+}
+// position a canvas layer over the page area r (page units) at the current zoom
+export function placeLayer(c, r) {
+  const s = E.s;
+  c.style.left = r.x * s + 'px'; c.style.top = r.y * s + 'px'; c.style.width = r.w * s + 'px'; c.style.height = r.h * s + 'px';
 }
 export function syncViews() {
   const pagesEl = $('#pages'), keep = new Set(E.pages.map(p => p.id));
@@ -88,7 +94,7 @@ export function unmount(v, force) {
   if (!force && D.active && D.v === v) return;
   if (E.sel && E.sel.v === v) clearSelection();
   if (E.pasteBar && E.pasteBar.parentNode === v.el) hidePasteBar();
-  v.canvas.width = v.canvas.height = 0; v.canvas.remove(); v.canvas = null;
+  v.canvas.width = v.canvas.height = 0; v.canvas.remove(); v.canvas = null; dropDetail(v);
   if (live.parentNode === v.el) { live.remove(); live.width = live.height = 0; }
 }
 export function pageK(p) { let k = E.s * dpr(); if (p.w * p.h * k * k > MAX_CANVAS_PX) k = Math.sqrt(MAX_CANVAS_PX / (p.w * p.h)); return k; }
@@ -100,6 +106,11 @@ export function renderPage(v) {
   c.style.width = p.w * E.s + 'px'; c.style.height = p.h * E.s + 'px';
   v.k = k;
   const ctx = c.getContext('2d'); ctx.setTransform(k, 0, 0, k, 0, 0);
+  paintPage(ctx, v);
+  renderDetail(v);
+}
+export function paintPage(ctx, v) {
+  const p = v.page;
   drawPaper(ctx, p);
   if (p.bg) {
     const img = bgCache.get(p.bg);
@@ -109,6 +120,54 @@ export function renderPage(v) {
   const sel = E.sel && E.sel.v === v ? E.sel : null;
   drawImages(ctx, p, sel ? sel.iids : null, null, v);
   drawAllStrokes(ctx, p.strokes, sel ? sel.ids : null);
+}
+// draw something extra (e.g. a just-finished stroke) onto a page's canvases without repainting it all
+export function paintOn(v, fn) {
+  if (v.canvas) { const ctx = v.canvas.getContext('2d'); ctx.setTransform(v.k, 0, 0, v.k, 0, 0); fn(ctx); }
+  if (v.hi) { const ctx = v.hi.getContext('2d'); ctx.setTransform(v.hk, 0, 0, v.hk, -v.hr.x * v.hk, -v.hr.y * v.hk); fn(ctx); }
+}
+
+/* Sharp ink when zoomed in: one page-sized canvas can only hold so many pixels (iOS limit), so past about
+   1.6× zoom it gets stretched and looks soft. A second, "detail" canvas then covers just the part of the
+   page on screen (plus a margin) at full screen resolution, and is redrawn when scrolling stops. */
+export function detailRect(v) {
+  const p = v.page, full = E.s * dpr();
+  if (!v.canvas || pageK(p) >= full * 0.98) return null;
+  const sr = sc().getBoundingClientRect(), er = v.el.getBoundingClientRect(), s = E.s;
+  const vis = r => ({ x0: clamp((r.left - er.left) / s, 0, p.w), y0: clamp((r.top - er.top) / s, 0, p.h), x1: clamp((r.right - er.left) / s, 0, p.w), y1: clamp((r.bottom - er.top) / s, 0, p.h) });
+  const mx = sr.width * DETAIL_MARGIN, my = sr.height * DETAIL_MARGIN;
+  let r = vis({ left: sr.left - mx, top: sr.top - my, right: sr.right + mx, bottom: sr.bottom + my }), k = full;
+  if ((r.x1 - r.x0) * (r.y1 - r.y0) * k * k > MAX_CANVAS_PX) r = vis(sr);
+  const a = (r.x1 - r.x0) * (r.y1 - r.y0);
+  if (a < 1) return null;
+  if (a * k * k > MAX_CANVAS_PX) k = Math.sqrt(MAX_CANVAS_PX / a);
+  // snap to whole device pixels so the detail lines up exactly with the screen
+  const x = Math.floor(r.x0 * k) / k, y = Math.floor(r.y0 * k) / k;
+  return { x, y, w: Math.ceil(r.x1 * k) / k - x, h: Math.ceil(r.y1 * k) / k - y, k };
+}
+export const DETAIL_MARGIN = 0.12;
+export function renderDetail(v) {
+  const r = detailRect(v);
+  if (!r) { dropDetail(v); return; }
+  if (!v.hi) { v.hi = document.createElement('canvas'); v.hi.className = 'pc hi'; }
+  if (v.hi.parentNode !== v.el) v.canvas.after(v.hi);
+  const c = v.hi, W = Math.round(r.w * r.k), H = Math.round(r.h * r.k);
+  if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
+  v.hr = { x: r.x, y: r.y, w: r.w, h: r.h }; v.hk = r.k; placeLayer(c, v.hr);
+  const ctx = c.getContext('2d'); ctx.setTransform(r.k, 0, 0, r.k, -r.x * r.k, -r.y * r.k);
+  paintPage(ctx, v);
+}
+export function dropDetail(v) { if (!v.hi) return; v.hi.width = v.hi.height = 0; v.hi.remove(); v.hi = null; v.hr = null; }
+// after scrolling settles, move each on-screen page's detail canvas to what's now visible
+export function scheduleDetail() {
+  clearTimeout(E.detailT);
+  E.detailT = setTimeout(() => {
+    if (!E.open) return;
+    if (D.active || G.touches.size) { scheduleDetail(); return; }
+    let moved = false;
+    for (const v of E.views.values()) if (v.canvas && (v.hi || pageK(v.page) < E.s * dpr() * 0.98)) { renderDetail(v); moved = true; }
+    if (moved) { if (E.crop) drawCrop(); else if (E.sel) drawSelection(); }
+  }, 140);
 }
 export function scheduleRerender() {
   clearTimeout(E.rerenderT);

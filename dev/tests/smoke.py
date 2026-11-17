@@ -313,7 +313,30 @@ async def main():
             for i in range(1, 9): await ev(page, 'pointermove', 51, 'touch', 550 - i * 10, 500); await ev(page, 'pointermove', 52, 'touch', 650 + i * 10, 500)
             await ev(page, 'pointerup', 51, 'touch', 470, 500); await ev(page, 'pointerup', 52, 'touch', 730, 500); await page.wait_for_timeout(300)
             check('pinch zoom', await J(page, '__margin.E.s') > s0 * 2)
+            # ---------- sharp ink when zoomed in: a detail canvas covers the visible part at full screen resolution ----------
+            await page.wait_for_timeout(300)
+            hi = '''(()=>{const s=__margin.E.s,d=devicePixelRatio,sr=document.getElementById('scroller').getBoundingClientRect();
+                for(const v of __margin.E.views.values()){ if(!v.hi) continue; const r=v.hi.getBoundingClientRect(), e=v.el.getBoundingClientRect();
+                  const cov = r.top<=Math.max(sr.top,e.top)+1 && r.bottom>=Math.min(sr.bottom,e.bottom)-1;
+                  return {k:v.hi.width/r.width, want:d, base:v.canvas.width/v.canvas.getBoundingClientRect().width, cov, y:v.hr.y, id:v.page.id}; } return null})()'''
+            d0 = await J(page, hi)
+            check('zoomed in: detail canvas is at full screen resolution and covers the view', d0 is not None and abs(d0['k'] - d0['want']) < 0.02 and d0['base'] < d0['want'] * 0.8 and d0['cov'], str(d0))
+            zpid = await J(page, "__margin.E.pages.findIndex(p=>p.id===%r)" % (d0 or {}).get('id', ''))
+            zn = await J(page, f"__margin.E.pages[{zpid}].strokes.length")
+            await drag(page, 'pen', 8, [[480 + i * 8, 520 + 6 * math.sin(i / 3)] for i in range(26)])
+            dark = '''(([x,y])=>{for(const v of __margin.E.views.values()){ if(!v.hi) continue; const e=v.el.getBoundingClientRect(), s=__margin.E.s;
+                if(x<e.left||x>e.right||y<e.top||y>e.bottom) continue;
+                const px=Math.round(((x-e.left)/s-v.hr.x)*v.hk), py=Math.round(((y-e.top)/s-v.hr.y)*v.hk), ctx=v.hi.getContext('2d');
+                const d=ctx.getImageData(px-6,py-6,13,13).data; let m=255; for(let i=0;i<d.length;i+=4) m=Math.min(m,d[i]); return m;} return -1})'''
+            check('zoomed in: new ink is drawn onto the sharp detail canvas', await J(page, f"__margin.E.pages[{zpid}].strokes.length") == zn + 1 and 0 <= await page.evaluate(dark, [576, 520]) < 90)
+            await page.screenshot(path=str(SHOTS / 'zoomed.png'))
+            await page.evaluate("document.getElementById('scroller').scrollTop += 300"); await page.wait_for_timeout(450)
+            d1 = await J(page, hi)
+            check('zoomed in: detail follows scrolling', d1 is not None and d1['cov'] and abs(d1['k'] - d1['want']) < 0.02 and (d1['id'] != d0['id'] or d1['y'] > d0['y']), str(d1))
+            await page.click('#ed-undo'); await page.wait_for_timeout(100)
+            check('zoomed-in stroke undone', await J(page, f"__margin.E.pages[{zpid}].strokes.length") == zn)
             await page.keyboard.press('Control+0'); await page.wait_for_timeout(200)
+            check('back at normal zoom: no detail canvas needed', await J(page, "[...__margin.E.views.values()].every(v=>!v.hi)"))
 
             # ---------- PDF: drop into open note, export ----------
             n_pages = await J(page, '__margin.E.pages.length')

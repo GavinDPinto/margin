@@ -96,7 +96,7 @@ export function drawSelection() {
   if (f.r) { ctx.translate(f.rx, f.ry); ctx.rotate(f.r); ctx.translate(-f.rx, -f.ry); }
   ctx.translate(f.dx, f.dy); ctx.translate(f.ax, f.ay); ctx.scale(f.k, f.k); ctx.translate(-f.ax, -f.ay);
   drawImages(ctx, p, null, s.iids, s.v);
-  ctx.shadowColor = 'rgba(45,91,227,.55)'; ctx.shadowBlur = 5 * s.v.k;
+  ctx.shadowColor = 'rgba(45,91,227,.55)'; ctx.shadowBlur = 5 * (s.v.lk || s.v.k);
   for (const st of p.strokes) if (st.t === 'hl' && s.ids.has(st.id)) drawStroke(ctx, st);
   for (const st of p.strokes) if (st.t !== 'hl' && s.ids.has(st.id)) drawStroke(ctx, st);
   ctx.restore();

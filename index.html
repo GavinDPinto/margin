@@ -1766,7 +1766,7 @@ textarea.inp {
   }
 
   // src/js/core/version.js
-  var APP_VERSION = "20 · scribble tip shows once";
+  var APP_VERSION = "21 · sharp ink when zoomed in";
   var FEEDBACK_URL = "https://script.google.com/macros/s/AKfycbwWB5T4Ub6DSeicrK29jn5vVLB93mFyUzgY4YR9mQt8joWW-PzVqXbq_9LzRmcoS2g2kQ/exec";
   var HOME_URL = "https://margin.gavinpinto.ca/";
   var OLD_HOSTS = ["gavindpinto.github.io"];
@@ -2800,7 +2800,7 @@ textarea.inp {
     ctx.translate(-f.ax, -f.ay);
     drawImages(ctx, p, null, s.iids, s.v);
     ctx.shadowColor = "rgba(45,91,227,.55)";
-    ctx.shadowBlur = 5 * s.v.k;
+    ctx.shadowBlur = 5 * (s.v.lk || s.v.k);
     for (const st of p.strokes) if (st.t === "hl" && s.ids.has(st.id)) drawStroke(ctx, st);
     for (const st of p.strokes) if (st.t !== "hl" && s.ids.has(st.id)) drawStroke(ctx, st);
     ctx.restore();
@@ -3598,17 +3598,19 @@ textarea.inp {
   var G = { touches: /* @__PURE__ */ new Map(), mode: null, start: null, samples: [], tap: null, pinch: null, mom: 0 };
   function attachLive(v) {
     if (live.parentNode !== v.el) v.el.insertBefore(live, v.textLayer);
-    const k = v.k, W = Math.round(v.page.w * k), H = Math.round(v.page.h * k);
+    const r = v.hi ? v.hr : { x: 0, y: 0, w: v.page.w, h: v.page.h }, k = v.hi ? v.hk : v.k;
+    const W = Math.round(r.w * k), H = Math.round(r.h * k);
     if (live.width !== W || live.height !== H) {
       live.width = W;
       live.height = H;
     }
-    live.style.width = v.page.w * E.s + "px";
-    live.style.height = v.page.h * E.s + "px";
+    v.lr = r;
+    v.lk = k;
+    placeLayer(live, r);
     const ctx = live.getContext("2d");
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, W, H);
-    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.setTransform(k, 0, 0, k, -r.x * k, -r.y * k);
     live.style.mixBlendMode = "";
     return ctx;
   }
@@ -3937,11 +3939,7 @@ textarea.inp {
     pushUndo({ k: "page", id: p.id, before: D.before, after: snap(p) });
     clearLive();
     if (st.t === "hl") renderPage(v);
-    else if (v.canvas) {
-      const ctx = v.canvas.getContext("2d");
-      ctx.setTransform(v.k, 0, 0, v.k, 0, 0);
-      drawStroke(ctx, st);
-    }
+    else paintOn(v, (ctx) => drawStroke(ctx, st));
   }
 
   // src/js/selection/clipboard.js
@@ -5517,10 +5515,15 @@ ${xref}
       v.canvas.style.width = p.w * s + "px";
       v.canvas.style.height = p.h * s + "px";
     }
-    if (live.parentNode === v.el) {
-      live.style.width = p.w * s + "px";
-      live.style.height = p.h * s + "px";
-    }
+    if (v.hi) placeLayer(v.hi, v.hr);
+    if (live.parentNode === v.el) placeLayer(live, v.lr || { x: 0, y: 0, w: p.w, h: p.h });
+  }
+  function placeLayer(c, r) {
+    const s = E.s;
+    c.style.left = r.x * s + "px";
+    c.style.top = r.y * s + "px";
+    c.style.width = r.w * s + "px";
+    c.style.height = r.h * s + "px";
   }
   function syncViews() {
     const pagesEl = $("#pages"), keep = new Set(E.pages.map((p) => p.id));
@@ -5559,6 +5562,7 @@ ${xref}
     v.canvas.width = v.canvas.height = 0;
     v.canvas.remove();
     v.canvas = null;
+    dropDetail(v);
     if (live.parentNode === v.el) {
       live.remove();
       live.width = live.height = 0;
@@ -5583,6 +5587,11 @@ ${xref}
     v.k = k;
     const ctx = c.getContext("2d");
     ctx.setTransform(k, 0, 0, k, 0, 0);
+    paintPage(ctx, v);
+    renderDetail(v);
+  }
+  function paintPage(ctx, v) {
+    const p = v.page;
     drawPaper(ctx, p);
     if (p.bg) {
       const img = bgCache.get(p.bg);
@@ -5600,6 +5609,82 @@ ${xref}
     const sel = E.sel && E.sel.v === v ? E.sel : null;
     drawImages(ctx, p, sel ? sel.iids : null, null, v);
     drawAllStrokes(ctx, p.strokes, sel ? sel.ids : null);
+  }
+  function paintOn(v, fn) {
+    if (v.canvas) {
+      const ctx = v.canvas.getContext("2d");
+      ctx.setTransform(v.k, 0, 0, v.k, 0, 0);
+      fn(ctx);
+    }
+    if (v.hi) {
+      const ctx = v.hi.getContext("2d");
+      ctx.setTransform(v.hk, 0, 0, v.hk, -v.hr.x * v.hk, -v.hr.y * v.hk);
+      fn(ctx);
+    }
+  }
+  function detailRect(v) {
+    const p = v.page, full = E.s * dpr();
+    if (!v.canvas || pageK(p) >= full * 0.98) return null;
+    const sr = sc().getBoundingClientRect(), er = v.el.getBoundingClientRect(), s = E.s;
+    const vis = (r2) => ({ x0: clamp((r2.left - er.left) / s, 0, p.w), y0: clamp((r2.top - er.top) / s, 0, p.h), x1: clamp((r2.right - er.left) / s, 0, p.w), y1: clamp((r2.bottom - er.top) / s, 0, p.h) });
+    const mx = sr.width * DETAIL_MARGIN, my = sr.height * DETAIL_MARGIN;
+    let r = vis({ left: sr.left - mx, top: sr.top - my, right: sr.right + mx, bottom: sr.bottom + my }), k = full;
+    if ((r.x1 - r.x0) * (r.y1 - r.y0) * k * k > MAX_CANVAS_PX) r = vis(sr);
+    const a = (r.x1 - r.x0) * (r.y1 - r.y0);
+    if (a < 1) return null;
+    if (a * k * k > MAX_CANVAS_PX) k = Math.sqrt(MAX_CANVAS_PX / a);
+    const x = Math.floor(r.x0 * k) / k, y = Math.floor(r.y0 * k) / k;
+    return { x, y, w: Math.ceil(r.x1 * k) / k - x, h: Math.ceil(r.y1 * k) / k - y, k };
+  }
+  var DETAIL_MARGIN = 0.12;
+  function renderDetail(v) {
+    const r = detailRect(v);
+    if (!r) {
+      dropDetail(v);
+      return;
+    }
+    if (!v.hi) {
+      v.hi = document.createElement("canvas");
+      v.hi.className = "pc hi";
+    }
+    if (v.hi.parentNode !== v.el) v.canvas.after(v.hi);
+    const c = v.hi, W = Math.round(r.w * r.k), H = Math.round(r.h * r.k);
+    if (c.width !== W || c.height !== H) {
+      c.width = W;
+      c.height = H;
+    }
+    v.hr = { x: r.x, y: r.y, w: r.w, h: r.h };
+    v.hk = r.k;
+    placeLayer(c, v.hr);
+    const ctx = c.getContext("2d");
+    ctx.setTransform(r.k, 0, 0, r.k, -r.x * r.k, -r.y * r.k);
+    paintPage(ctx, v);
+  }
+  function dropDetail(v) {
+    if (!v.hi) return;
+    v.hi.width = v.hi.height = 0;
+    v.hi.remove();
+    v.hi = null;
+    v.hr = null;
+  }
+  function scheduleDetail() {
+    clearTimeout(E.detailT);
+    E.detailT = setTimeout(() => {
+      if (!E.open) return;
+      if (D.active || G.touches.size) {
+        scheduleDetail();
+        return;
+      }
+      let moved = false;
+      for (const v of E.views.values()) if (v.canvas && (v.hi || pageK(v.page) < E.s * dpr() * 0.98)) {
+        renderDetail(v);
+        moved = true;
+      }
+      if (moved) {
+        if (E.crop) drawCrop();
+        else if (E.sel) drawSelection();
+      }
+    }, 140);
   }
   function scheduleRerender() {
     clearTimeout(E.rerenderT);
@@ -5838,6 +5923,7 @@ ${xref}
     }, { passive: false });
     s.addEventListener("scroll", () => {
       requestAnimationFrame(updIndicator);
+      scheduleDetail();
     }, { passive: true });
     s.addEventListener("wheel", (e) => {
       if (!(e.ctrlKey || e.metaKey)) return;

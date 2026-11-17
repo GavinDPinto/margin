@@ -1,7 +1,7 @@
 // Wires up editor buttons, pointer/touch listeners and keyboard shortcuts.
 import { icon } from '../core/icons.js';
 import { $, clamp } from '../core/util.js';
-import { E, closeNote, fitScale, redo, saveNote, sc, scheduleRerender, setScale, undo, updIndicator, zoomAround } from '../editor/editor.js';
+import { E, closeNote, fitScale, redo, saveNote, sc, scheduleDetail, scheduleRerender, setScale, undo, updIndicator, zoomAround } from '../editor/editor.js';
 import { addPage, bindToolbar, editorMenu, setTool } from '../editor/toolbar.js';
 import { D, endDraw, onPointerDown, onPointerMove, onPointerUp } from '../input/pointer.js';
 import { copySelection, currentView, pasteClip } from '../selection/clipboard.js';
@@ -33,7 +33,7 @@ export function bindEditor() {
   const stylusGuard = e => { if (E.tool === 'text' && !D.active) return; for (const t of e.changedTouches) if (t.touchType === 'stylus') { e.preventDefault(); return; } };
   s.addEventListener('touchstart', stylusGuard, { passive: false });
   s.addEventListener('touchmove', e => { if (e.target.closest && e.target.closest('.tbox') && !D.active) return; e.preventDefault(); }, { passive: false });
-  s.addEventListener('scroll', () => { requestAnimationFrame(updIndicator); }, { passive: true });
+  s.addEventListener('scroll', () => { requestAnimationFrame(updIndicator); scheduleDetail(); }, { passive: true });
   s.addEventListener('wheel', e => {
     if (!(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();

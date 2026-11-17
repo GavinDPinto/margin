@@ -1,7 +1,7 @@
 // Pointer routing (Pencil / finger / mouse), live canvas, ink strokes.
 import { SET, saveSettings } from '../core/config.js';
 import { now } from '../core/util.js';
-import { E, live, pushUndo, renderPage, restoreSnap, sc, snap } from '../editor/editor.js';
+import { E, live, placeLayer, pushUndo, renderPage, restoreSnap, sc, snap } from '../editor/editor.js';
 import { commitActiveText, createTextBox } from '../editor/text.js';
 import { beginErase, eraseSeg, queueEraseFrame } from '../input/eraser.js';
 import { onTouchDown, onTouchMove, onTouchUp, stopMomentum } from '../input/gestures.js';
@@ -19,10 +19,12 @@ export const G = { touches: new Map(), mode: null, start: null, samples: [], tap
 
 export function attachLive(v) {
   if (live.parentNode !== v.el) v.el.insertBefore(live, v.textLayer);
-  const k = v.k, W = Math.round(v.page.w * k), H = Math.round(v.page.h * k);
+  // when zoomed in far, the live layer covers the same sharp area as the page's detail canvas
+  const r = v.hi ? v.hr : { x: 0, y: 0, w: v.page.w, h: v.page.h }, k = v.hi ? v.hk : v.k;
+  const W = Math.round(r.w * k), H = Math.round(r.h * k);
   if (live.width !== W || live.height !== H) { live.width = W; live.height = H; }
-  live.style.width = v.page.w * E.s + 'px'; live.style.height = v.page.h * E.s + 'px';
-  const ctx = live.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.setTransform(k, 0, 0, k, 0, 0);
+  v.lr = r; v.lk = k; placeLayer(live, r);
+  const ctx = live.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.setTransform(k, 0, 0, k, -r.x * k, -r.y * k);
   live.style.mixBlendMode = '';
   return ctx;
 }
