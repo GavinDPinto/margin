@@ -15,7 +15,7 @@
 
 const CONFIG = {
   REPO: 'GavinDPinto/margin',
-  APP_URL: 'https://gavindpinto.github.io/margin/',
+  APP_URL: 'https://margin.gavinpinto.ca/',
   MEDIA_BRANCH: 'feedback-media',
   APPROVED_LABEL: 'approved-feedback',
   SHIPPED_LABEL: 'shipped',

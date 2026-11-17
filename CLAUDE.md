@@ -1,6 +1,6 @@
 # Margin: notes app for iPad + Apple Pencil
 
-Margin is a local-first handwritten notes web app. GitHub Pages serves it from the repo root at https://gavindpinto.github.io/margin/. There's no server. All user data lives in the browser's IndexedDB on the user's own device.
+Margin is a local-first handwritten notes web app. GitHub Pages serves it from the repo root at https://margin.gavinpinto.ca/ (custom domain set by the `CNAME` file; the old https://gavindpinto.github.io/margin/ address redirects there). There's no server. All user data lives in the browser's IndexedDB on the user's own device.
 
 ## Layout
 | Path | What it is |
